@@ -1,0 +1,975 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>CHAINTRACE — Live Mule-Chain Tracer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:            #0a0e17;
+    --panel:         #10151f;
+    --panel-2:       #141b28;
+    --border:        rgba(255,255,255,0.07);
+    --border-strong: rgba(255,255,255,0.14);
+    --text:          #e7eaf1;
+    --muted:         #7c8598;
+    --muted-2:       #545d70;
+    --accent:        #22d3ee;
+    --accent-dim:    rgba(34,211,238,0.15);
+    --danger:        #f43f5e;
+    --ok:            #34d399;
+
+    --role-source:   #34d399;
+    --role-mule:     #f5a524;
+    --role-chain:    #38bdf8;
+    --role-final:    #f43f5e;
+    --role-focus:    #a78bfa;
+    --role-peer:     #8b93a7;
+
+    --card-w: 216px;
+    --card-h: 76px;
+  }
+  *{ box-sizing:border-box; }
+  html,body{
+    margin:0; padding:0; height:100%;
+    background:
+      radial-gradient(1200px 600px at 15% -10%, rgba(34,211,238,0.06), transparent 60%),
+      radial-gradient(900px 500px at 100% 0%, rgba(167,139,250,0.05), transparent 55%),
+      var(--bg);
+    color:var(--text);
+    font-family:'Space Grotesk', 'Segoe UI', sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .mono{ font-family:'JetBrains Mono', monospace; }
+  ::selection{ background:var(--accent-dim); }
+  ::-webkit-scrollbar{ width:10px; height:10px; }
+  ::-webkit-scrollbar-thumb{ background:var(--border-strong); border-radius:6px; }
+  ::-webkit-scrollbar-track{ background:transparent; }
+
+  a{ color:inherit; }
+  button{ font-family:inherit; cursor:pointer; }
+
+  /* ---------- shell ---------- */
+  .shell{ max-width:1360px; margin:0 auto; padding:22px 26px 60px; }
+
+  .topbar{
+    display:flex; align-items:center; justify-content:space-between;
+    gap:16px; margin-bottom:20px; flex-wrap:wrap;
+  }
+  .brand{ display:flex; align-items:center; gap:12px; }
+  .brand-mark{
+    width:38px; height:38px; border-radius:10px;
+    background:linear-gradient(135deg, var(--accent), #6366f1);
+    display:flex; align-items:center; justify-content:center;
+    font-weight:700; font-size:16px; color:#04121a;
+    box-shadow:0 0 22px rgba(34,211,238,0.35);
+    flex-shrink:0;
+  }
+  .brand h1{ font-size:19px; margin:0; letter-spacing:0.2px; font-weight:700; }
+  .brand p{ margin:1px 0 0; font-size:12px; color:var(--muted); }
+
+  .status-cluster{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .pill{
+    display:flex; align-items:center; gap:7px;
+    background:var(--panel); border:1px solid var(--border);
+    padding:7px 12px; border-radius:999px; font-size:12.5px; color:var(--muted);
+    white-space:nowrap;
+  }
+  .pill b{ color:var(--text); font-weight:600; margin-left:2px; }
+  .dot{ width:8px; height:8px; border-radius:50%; background:var(--muted-2); flex-shrink:0; }
+  .dot.live{ background:var(--ok); box-shadow:0 0 8px rgba(52,211,153,0.9); animation:pulse 1.8s infinite; }
+  .dot.down{ background:var(--danger); box-shadow:0 0 8px rgba(244,63,94,0.9); }
+  @keyframes pulse{ 0%,100%{ opacity:1; } 50%{ opacity:0.45; } }
+
+  .cfg-btn{
+    background:var(--panel); border:1px solid var(--border); color:var(--muted);
+    width:34px; height:34px; border-radius:9px; display:flex; align-items:center; justify-content:center;
+    font-size:15px; transition:.15s;
+  }
+  .cfg-btn:hover{ color:var(--text); border-color:var(--border-strong); }
+
+  .cfg-pop{
+    position:absolute; right:26px; top:64px; z-index:60;
+    background:var(--panel-2); border:1px solid var(--border-strong);
+    border-radius:12px; padding:14px; width:300px;
+    box-shadow:0 20px 45px rgba(0,0,0,0.5);
+    display:none;
+  }
+  .cfg-pop.open{ display:block; }
+  .cfg-pop label{ font-size:11.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; }
+  .cfg-pop input{
+    width:100%; margin-top:6px; margin-bottom:10px;
+    background:var(--bg); border:1px solid var(--border); color:var(--text);
+    padding:9px 10px; border-radius:8px; font-size:13px; font-family:'JetBrains Mono',monospace;
+  }
+  .cfg-pop button{
+    width:100%; background:var(--accent); color:#04121a; border:none;
+    padding:9px; border-radius:8px; font-weight:600; font-size:13px;
+  }
+
+  /* ---------- search ---------- */
+  .search-row{ display:flex; gap:10px; margin-bottom:18px; }
+  .search-box{
+    flex:1; display:flex; align-items:center; gap:10px;
+    background:var(--panel); border:1px solid var(--border); border-radius:11px;
+    padding:0 14px; transition:.15s;
+  }
+  .search-box:focus-within{ border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-dim); }
+  .search-box svg{ flex-shrink:0; opacity:.55; }
+  .search-box input{
+    flex:1; background:none; border:none; outline:none; color:var(--text);
+    padding:13px 0; font-size:14.5px; font-family:'JetBrains Mono', monospace;
+  }
+  .search-box input::placeholder{ color:var(--muted-2); font-family:'Space Grotesk',sans-serif; }
+  .trace-btn{
+    background:linear-gradient(135deg, var(--accent), #6366f1); border:none; color:#04121a;
+    font-weight:700; font-size:14.5px; padding:0 26px; border-radius:11px;
+    box-shadow:0 6px 20px rgba(34,211,238,0.25); transition:.15s;
+  }
+  .trace-btn:hover{ transform:translateY(-1px); box-shadow:0 8px 24px rgba(34,211,238,0.35); }
+  .trace-btn:active{ transform:translateY(0); }
+  .trace-hint{ font-size:12px; color:var(--muted-2); margin:-8px 0 18px 2px; }
+
+  .panel{
+    background:var(--panel); border:1px solid var(--border); border-radius:14px;
+    padding:20px; margin-bottom:18px;
+  }
+  .panel-title{ font-size:13px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin:0 0 14px; font-weight:600; }
+
+  .empty-state{
+    text-align:center; padding:50px 20px; color:var(--muted);
+  }
+  .empty-state .glyph{ font-size:34px; margin-bottom:10px; opacity:.5; }
+  .empty-state h3{ color:var(--text); font-size:15px; margin:0 0 6px; }
+  .empty-state p{ font-size:13px; margin:0; }
+
+  .match-badge{
+    display:inline-block; font-size:11.5px; font-weight:700; letter-spacing:.05em;
+    padding:4px 10px; border-radius:999px; text-transform:uppercase; margin-bottom:14px;
+  }
+  .match-account{ background:rgba(52,211,153,.14); color:var(--role-source); }
+  .match-transaction{ background:rgba(56,189,248,.14); color:var(--role-chain); }
+  .match-scenario{ background:rgba(245,165,36,.14); color:var(--role-mule); }
+  .match-partial{ background:rgba(139,147,167,.14); color:var(--muted); }
+  .match-none{ background:rgba(244,63,94,.14); color:var(--danger); }
+
+  .chips{ display:flex; flex-wrap:wrap; gap:8px; margin-top:6px; }
+  .chip{
+    background:var(--panel-2); border:1px solid var(--border); color:var(--text);
+    padding:8px 12px; border-radius:9px; font-size:12.5px; display:flex; gap:8px; align-items:center;
+    transition:.15s;
+  }
+  .chip:hover{ border-color:var(--accent); background:rgba(34,211,238,.06); }
+  .chip .p-tag{ font-size:10px; padding:2px 6px; border-radius:5px; font-weight:700; letter-spacing:.03em; }
+
+  /* ---------- scenario grid ---------- */
+  .refresh-note{ font-size:11.5px; color:var(--muted-2); display:flex; align-items:center; gap:6px; }
+
+  /* ---------- scenarios side button + drawer ---------- */
+  .scn-fab{
+    position:fixed; right:0; top:50%; transform:translateY(-50%);
+    display:flex; align-items:center; gap:9px;
+    background:var(--panel-2); border:1px solid var(--border-strong); border-right:none;
+    color:var(--text); padding:13px 16px 13px 14px; border-radius:12px 0 0 12px;
+    box-shadow:-10px 10px 30px rgba(0,0,0,0.4); z-index:70; font-weight:600; font-size:13.5px;
+    transition:.15s;
+  }
+  .scn-fab:hover{ padding-right:20px; background:#182131; }
+  .scn-fab-icon{ font-size:16px; }
+  .scn-fab-count{
+    background:var(--accent); color:#04121a; font-size:11px; font-weight:700;
+    min-width:20px; height:20px; padding:0 5px; border-radius:999px;
+    display:flex; align-items:center; justify-content:center;
+  }
+
+  .drawer-veil{
+    position:fixed; inset:0; background:rgba(4,6,11,0.55); backdrop-filter:blur(2px);
+    display:none; z-index:90;
+  }
+  .drawer-veil.open{ display:block; }
+  .scn-drawer{
+    position:fixed; right:0; top:0; bottom:0; width:min(460px, 94vw);
+    background:var(--panel); border-left:1px solid var(--border-strong);
+    box-shadow:-24px 0 60px rgba(0,0,0,0.5);
+    display:flex; flex-direction:column; padding:20px;
+    transform:translateX(100%); transition:transform .25s ease;
+  }
+  .drawer-veil.open .scn-drawer{ transform:translateX(0); }
+  .drawer-head{ display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px; flex-shrink:0; }
+  .drawer-head h2{ margin:0 0 4px; font-size:18px; }
+  .drawer-sub{ margin:0; font-size:12px; color:var(--muted); display:flex; align-items:center; gap:6px; }
+  .drawer-body{ overflow-y:auto; flex:1; margin:0 -6px; padding:0 6px; }
+
+  .scenario-grid{
+    display:grid; grid-template-columns:repeat(auto-fill, minmax(280px,1fr)); gap:14px;
+  }
+  .scn-card{
+    background:var(--panel); border:1px solid var(--border); border-radius:13px;
+    padding:16px; cursor:pointer; position:relative; overflow:hidden; transition:.15s;
+  }
+  .scn-card:hover{ border-color:var(--border-strong); transform:translateY(-2px); box-shadow:0 12px 30px rgba(0,0,0,0.35); }
+  .scn-card.is-new::before{
+    content:'NEW'; position:absolute; top:10px; right:10px; font-size:9.5px; font-weight:700;
+    letter-spacing:.06em; color:#04121a; background:var(--accent); padding:2px 7px; border-radius:5px;
+    animation:pulse 1.4s infinite;
+  }
+  .scn-top{ display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px; gap:8px; }
+  .scn-id{ font-family:'JetBrains Mono',monospace; font-size:13px; font-weight:600; }
+  .scn-pattern{
+    font-size:10px; font-weight:700; letter-spacing:.05em; padding:3px 8px; border-radius:5px; flex-shrink:0;
+  }
+  .pat-LINEAR{ background:rgba(56,189,248,.15); color:var(--role-chain); }
+  .pat-BRANCH{ background:rgba(245,165,36,.15); color:var(--role-mule); }
+  .pat-FAN-IN{ background:rgba(167,139,250,.15); color:var(--role-focus); }
+  .pat-MIXED{ background:rgba(244,63,94,.15); color:var(--role-final); }
+
+  .scn-flow{ font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--muted); margin-bottom:12px; line-height:1.7; }
+  .scn-flow .arrow{ color:var(--muted-2); margin:0 4px; }
+  .scn-flow .src{ color:var(--role-source); }
+  .scn-flow .mul{ color:var(--role-mule); }
+  .scn-flow .fin{ color:var(--role-final); }
+
+  .scn-meta{ display:flex; justify-content:space-between; align-items:center; font-size:11.5px; color:var(--muted-2); }
+  .scn-states{ display:flex; gap:5px; flex-wrap:wrap; }
+  .state-tag{ background:var(--panel-2); border:1px solid var(--border); padding:2px 7px; border-radius:5px; color:var(--muted); }
+
+  /* ---------- graph canvas ---------- */
+  .graph-scroll{
+    overflow:auto; border-radius:12px;
+    background:#0b0f18;
+    border:1px solid var(--border); position:relative; min-height:220px;
+  }
+  .graph-scroll.pannable{ cursor:grab; }
+  .graph-scroll.panning{ cursor:grabbing; user-select:none; }
+  .graph-canvas{ position:relative; }
+  .graph-canvas svg{ position:absolute; top:0; left:0; overflow:visible; pointer-events:none; }
+
+  .acct-card{
+    position:absolute; width:var(--card-w); height:var(--card-h);
+    background:linear-gradient(180deg, #151d2c, #10151f);
+    border:1px solid var(--border-strong); border-radius:10px;
+    display:flex; overflow:hidden;
+    box-shadow:0 8px 20px rgba(0,0,0,0.4);
+    transition:transform .15s, box-shadow .15s;
+  }
+  .acct-card:hover{ transform:translateY(-2px); box-shadow:0 14px 28px rgba(0,0,0,0.5); z-index:5; }
+  .acct-strip{ width:6px; flex-shrink:0; }
+  .acct-body{ flex:1; padding:11px 13px; display:flex; flex-direction:column; justify-content:center; gap:5px; min-width:0; }
+  .acct-id{ font-family:'JetBrains Mono',monospace; font-size:13.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .acct-role{ font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; }
+
+  .edge-label{
+    position:absolute; font-family:'JetBrains Mono',monospace; font-size:11.5px; font-weight:600;
+    background:rgba(14,20,32,0.88); border:1px solid var(--border-strong); color:var(--text);
+    padding:2px 8px; border-radius:6px; white-space:nowrap; transform:translate(-50%,-50%);
+    pointer-events:none; box-shadow:0 4px 10px rgba(0,0,0,0.3); backdrop-filter:blur(2px);
+  }
+
+  .legend{ display:flex; gap:16px; flex-wrap:wrap; margin-top:14px; font-size:12px; color:var(--muted); }
+  .legend span{ display:inline-flex; align-items:center; gap:6px; }
+  .legend i{ width:10px; height:10px; border-radius:3px; display:inline-block; }
+
+  /* ---------- modal ---------- */
+  .modal-veil{
+    position:fixed; inset:0; background:rgba(4,6,11,0.72); backdrop-filter:blur(3px);
+    display:none; align-items:flex-start; justify-content:center; z-index:100; padding:40px 20px; overflow:auto;
+  }
+  .modal-veil.open{ display:flex; }
+  .modal{
+    background:var(--panel); border:1px solid var(--border-strong); border-radius:16px;
+    width:100%; max-width:1080px; padding:22px 24px 24px; box-shadow:0 30px 70px rgba(0,0,0,0.6);
+  }
+  .modal-head{ display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px; gap:10px; }
+  .modal-head h2{ margin:0; font-size:18px; font-family:'JetBrains Mono',monospace; }
+  .modal-sub{ color:var(--muted); font-size:12.5px; margin:4px 0 0; }
+  .modal-close{
+    background:var(--panel-2); border:1px solid var(--border); color:var(--muted);
+    width:32px; height:32px; border-radius:8px; font-size:16px; flex-shrink:0;
+  }
+  .modal-close:hover{ color:var(--text); }
+  .modal-stats{ display:flex; gap:10px; flex-wrap:wrap; margin:14px 0 16px; }
+  .modal-stats .pill{ font-size:11.5px; padding:6px 11px; }
+
+  .tx-table{ width:100%; border-collapse:collapse; margin-top:16px; font-size:12.5px; }
+  .tx-table th{
+    text-align:left; color:var(--muted); font-weight:600; font-size:11px; text-transform:uppercase;
+    letter-spacing:.04em; padding:8px 10px; border-bottom:1px solid var(--border);
+  }
+  .tx-table td{ padding:9px 10px; border-bottom:1px solid var(--border); font-family:'JetBrains Mono',monospace; color:var(--text); }
+  .tx-table tr:last-child td{ border-bottom:none; }
+  .mode-tag{ font-size:10px; padding:2px 6px; border-radius:5px; background:var(--panel-2); color:var(--muted); font-family:'Space Grotesk',sans-serif; font-weight:600; }
+
+  .details-toggle{ color:var(--accent); font-size:12.5px; background:none; border:none; margin-top:14px; font-weight:600; }
+
+  .toast{
+    position:fixed; bottom:22px; left:50%; transform:translateX(-50%);
+    background:#1a1015; border:1px solid rgba(244,63,94,0.4); color:#fca5b1;
+    padding:11px 18px; border-radius:10px; font-size:13px; z-index:200; display:none;
+    box-shadow:0 10px 30px rgba(0,0,0,0.5);
+  }
+  .toast.show{ display:block; }
+
+  @media (max-width:720px){
+    .shell{ padding:16px; }
+    .search-row{ flex-direction:column; }
+    .trace-btn{ padding:13px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+  <div class="topbar">
+    <div class="brand">
+      <div class="brand-mark">CT</div>
+      <div>
+        <h1>CHAINTRACE</h1>
+        <p>Live money-mule chain tracer &middot; UPI / IMPS / NEFT / RTGS</p>
+      </div>
+    </div>
+    <div class="status-cluster">
+      <div class="pill"><span class="dot" id="healthDot"></span><span id="healthLabel">connecting…</span></div>
+      <div class="pill">Scenarios<b id="statScenarios">–</b></div>
+      <div class="pill">Accounts<b id="statAccounts">–</b></div>
+      <div class="pill">Transactions<b id="statTx">–</b></div>
+      <button class="cfg-btn" id="cfgBtn" title="Backend settings">&#9881;</button>
+    </div>
+  </div>
+
+  <div class="cfg-pop" id="cfgPop">
+    <label>Backend base URL</label>
+    <input id="cfgUrl" class="mono" placeholder="http://localhost:8000" />
+    <button id="cfgSave">Save &amp; reconnect</button>
+  </div>
+
+  <!-- ===================== TRACE VIEW ===================== -->
+  <div id="view-trace">
+    <div class="search-row">
+      <div class="search-box">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        <input id="searchInput" class="mono" placeholder="Account ID, transaction ID, or alert ID… e.g. ACCT-4821" />
+      </div>
+      <button class="trace-btn" id="traceBtn">Trace</button>
+    </div>
+    <div class="trace-hint">Searches accounts, transactions and detected scenarios across the live graph.</div>
+
+    <div id="traceResults"></div>
+  </div>
+
+</div>
+
+<!-- ===================== SCENARIOS SIDE BUTTON ===================== -->
+<button class="scn-fab" id="scenarioFab" title="View detected scenarios">
+  <span class="scn-fab-icon">⛓</span>
+  <span class="scn-fab-text">Scenarios</span>
+  <span class="scn-fab-count" id="scenarioFabCount">–</span>
+</button>
+
+<!-- ===================== SCENARIOS DRAWER ===================== -->
+<div class="drawer-veil" id="drawerVeil">
+  <div class="scn-drawer" id="scnDrawer">
+    <div class="drawer-head">
+      <div>
+        <h2>Scenarios</h2>
+        <p class="drawer-sub"><span class="dot live" style="width:6px;height:6px;"></span>live &middot; updates every 5s</p>
+      </div>
+      <button class="modal-close" id="drawerClose">&times;</button>
+    </div>
+    <div class="drawer-body">
+      <div id="scenarioGrid" class="scenario-grid"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL ===================== -->
+<div class="modal-veil" id="modalVeil">
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <h2 id="modalTitle">SCN-XXXXXXXX</h2>
+        <p class="modal-sub" id="modalSub">Loading scenario…</p>
+      </div>
+      <button class="modal-close" id="modalClose">&times;</button>
+    </div>
+    <div class="modal-stats" id="modalStats"></div>
+    <div class="graph-scroll" id="modalGraphWrap" style="height:420px;">
+      <div class="graph-canvas" id="modalGraph"></div>
+    </div>
+    <div class="legend">
+      <span><i style="background:var(--role-source)"></i>Source</span>
+      <span><i style="background:var(--role-mule)"></i>Mule</span>
+      <span><i style="background:var(--role-chain)"></i>Chain account</span>
+      <span><i style="background:var(--role-final)"></i>Final</span>
+    </div>
+    <button class="details-toggle" id="txToggle">Show transaction ledger ▾</button>
+    <div id="txTableWrap" style="display:none;"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ===================== CONFIG ===================== */
+  const CFG_KEY = "chaintrace_backend_url";
+  let BASE_URL = localStorage.getItem(CFG_KEY) || "http://localhost:8000";
+
+  const cfgBtn = document.getElementById('cfgBtn');
+  const cfgPop = document.getElementById('cfgPop');
+  const cfgUrl = document.getElementById('cfgUrl');
+  cfgUrl.value = BASE_URL;
+  cfgBtn.addEventListener('click', () => cfgPop.classList.toggle('open'));
+  document.addEventListener('click', (e) => {
+    if (!cfgPop.contains(e.target) && e.target !== cfgBtn) cfgPop.classList.remove('open');
+  });
+  document.getElementById('cfgSave').addEventListener('click', () => {
+    const v = cfgUrl.value.trim().replace(/\/+$/, '');
+    if (v) { BASE_URL = v; localStorage.setItem(CFG_KEY, v); }
+    cfgPop.classList.remove('open');
+    refreshHealthAndStats();
+    if (drawerOpen) loadScenarios();
+  });
+
+  /* ===================== FETCH HELPER ===================== */
+  function withTimeout(promise, ms){
+    return Promise.race([
+      promise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))
+    ]);
+  }
+
+  async function api(path){
+    const res = await withTimeout(fetch(BASE_URL + path), 8000);
+    if (!res.ok) {
+      let detail = res.statusText;
+      try { const j = await res.json(); detail = j.detail || detail; } catch(e){}
+      throw new Error(detail || ('HTTP ' + res.status));
+    }
+    return res.json();
+  }
+
+  function showToast(msg){
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(showToast._h);
+    showToast._h = setTimeout(() => t.classList.remove('show'), 4200);
+  }
+
+  /* ===================== SCENARIOS DRAWER ===================== */
+  const scenarioFab = document.getElementById('scenarioFab');
+  const scenarioFabCount = document.getElementById('scenarioFabCount');
+  const drawerVeil = document.getElementById('drawerVeil');
+  const drawerClose = document.getElementById('drawerClose');
+  let drawerOpen = false;
+
+  function openDrawer(){
+    drawerOpen = true;
+    drawerVeil.classList.add('open');
+    loadScenarios();
+  }
+  function closeDrawer(){
+    drawerOpen = false;
+    drawerVeil.classList.remove('open');
+  }
+  scenarioFab.addEventListener('click', openDrawer);
+  drawerClose.addEventListener('click', closeDrawer);
+  drawerVeil.addEventListener('click', e => { if (e.target === drawerVeil) closeDrawer(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && drawerOpen) closeDrawer(); });
+
+  /* ===================== HEALTH + STATS (live) ===================== */
+  async function refreshHealthAndStats(){
+    const dot = document.getElementById('healthDot');
+    const label = document.getElementById('healthLabel');
+    try {
+      const health = await api('/api/health');
+      const ok = health.status === 'ok';
+      dot.className = 'dot ' + (ok ? 'live' : 'down');
+      label.textContent = ok ? 'live · neo4j connected' : 'neo4j disconnected';
+    } catch(e){
+      dot.className = 'dot down';
+      label.textContent = 'backend unreachable';
+    }
+    try {
+      const stats = await api('/api/stats');
+      document.getElementById('statScenarios').textContent = stats.scenarios ?? '–';
+      document.getElementById('statAccounts').textContent = stats.accounts ?? '–';
+      document.getElementById('statTx').textContent = stats.transactions ?? '–';
+      scenarioFabCount.textContent = stats.scenarios ?? '–';
+    } catch(e){ /* keep last known values */ }
+  }
+  refreshHealthAndStats();
+  setInterval(refreshHealthAndStats, 5000);
+
+  /* ===================== GRAPH LAYOUT + RENDER ===================== */
+  const CARD_W = 216, CARD_H = 76, GAP_X = 128, GAP_Y = 26, PAD = 30;
+
+  const ROLE_COLOR = {
+    SOURCE: 'var(--role-source)',
+    MULE: 'var(--role-mule)',
+    CHAIN_ACCOUNT: 'var(--role-chain)',
+    FINAL: 'var(--role-final)',
+    FOCUS: 'var(--role-focus)',
+    PEER: 'var(--role-peer)'
+  };
+  const ROLE_LABEL = {
+    SOURCE: 'Source', MULE: 'Mule', CHAIN_ACCOUNT: 'Chain', FINAL: 'Final',
+    FOCUS: 'Searched', PEER: 'Account'
+  };
+
+  // accounts: [{account_id, role}]  edges: [{source_account, destination_account, amount, mode, transaction_id, timestamp}]
+  function layoutGraph(accounts, edges){
+    const ids = accounts.map(a => a.account_id);
+    const hasIncoming = new Set(edges.map(e => e.destination_account));
+    let roots = ids.filter(id => !hasIncoming.has(id));
+    if (roots.length === 0 && ids.length) roots = [ids[0]];
+
+    const outAdj = new Map();
+    edges.forEach(e => {
+      if (!outAdj.has(e.source_account)) outAdj.set(e.source_account, []);
+      outAdj.get(e.source_account).push(e);
+    });
+
+    // Cap how far a level can grow: the longest possible simple path
+    // through the graph has at most ids.length - 1 hops. Anything trying
+    // to exceed that can only be a cycle (e.g. a counterparty that both
+    // sends to and receives from the focus account) — refuse to keep
+    // pushing its level outward so we terminate quickly instead of
+    // ping-ponging toward runaway coordinates.
+    const maxAllowedLevel = Math.max(0, ids.length - 1);
+    const level = new Map();
+    roots.forEach(r => level.set(r, 0));
+    const queue = [...roots];
+    let guard = 0;
+    const guardLimit = Math.max(1000, ids.length * ids.length * 4);
+    while (queue.length && guard < guardLimit) {
+      guard++;
+      const cur = queue.shift();
+      const curLevel = level.get(cur) ?? 0;
+      (outAdj.get(cur) || []).forEach(e => {
+        const dst = e.destination_account;
+        const nl = curLevel + 1;
+        if (nl > maxAllowedLevel) return;
+        if (!level.has(dst) || level.get(dst) < nl) {
+          level.set(dst, nl);
+          queue.push(dst);
+        }
+      });
+    }
+    ids.forEach(id => { if (!level.has(id)) level.set(id, 0); });
+
+    const byLevel = new Map();
+    ids.forEach(id => {
+      const l = level.get(id);
+      if (!byLevel.has(l)) byLevel.set(l, []);
+      byLevel.get(l).push(id);
+    });
+
+    const maxLevel = ids.length ? Math.max(...byLevel.keys()) : 0;
+    let maxTotalH = 0;
+    byLevel.forEach(arr => {
+      const h = arr.length * CARD_H + (arr.length - 1) * GAP_Y;
+      if (h > maxTotalH) maxTotalH = h;
+    });
+
+    const positions = new Map();
+    for (let l = 0; l <= maxLevel; l++) {
+      const arr = byLevel.get(l) || [];
+      const h = arr.length * CARD_H + (arr.length - 1) * GAP_Y;
+      const offsetY = (maxTotalH - h) / 2;
+      arr.forEach((id, i) => {
+        positions.set(id, {
+          x: PAD + l * (CARD_W + GAP_X),
+          y: PAD + offsetY + i * (CARD_H + GAP_Y)
+        });
+      });
+    }
+
+    return {
+      positions,
+      width: PAD * 2 + (maxLevel + 1) * CARD_W + maxLevel * GAP_X,
+      height: PAD * 2 + Math.max(maxTotalH, CARD_H)
+    };
+  }
+
+  function svgEl(tag, attrs){
+    const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+    for (const k in attrs) el.setAttribute(k, attrs[k]);
+    return el;
+  }
+
+  let edgeCounter = 0;
+
+  function renderGraph(container, accounts, edges){
+    container.innerHTML = '';
+    if (!accounts.length) {
+      container.parentElement.style.height = '160px';
+      container.innerHTML = '<div class="empty-state" style="width:100%;padding-top:40px;"><div class="glyph">◌</div><h3>No graph data</h3><p>No accounts to display for this result yet.</p></div>';
+      return;
+    }
+    const { positions, width, height } = layoutGraph(accounts, edges);
+    container.style.width = width + 'px';
+    container.style.height = height + 'px';
+    container.parentElement.style.height = Math.min(height + 24, 460) + 'px';
+
+    const svg = svgEl('svg', { width, height, viewBox: `0 0 ${width} ${height}` });
+    const defs = svgEl('defs', {});
+
+    const accountRole = new Map(accounts.map(a => [a.account_id, a.role]));
+
+    const glow = svgEl('filter', { id: 'glowDot', x: '-300%', y: '-300%', width: '700%', height: '700%' });
+    glow.appendChild(svgEl('feGaussianBlur', { stdDeviation: '3.2', result: 'blur' }));
+    const merge = svgEl('feMerge', {});
+    merge.appendChild(svgEl('feMergeNode', { in: 'blur' }));
+    merge.appendChild(svgEl('feMergeNode', { in: 'SourceGraphic' }));
+    glow.appendChild(merge);
+    defs.appendChild(glow);
+
+    svg.appendChild(defs);
+
+    const labels = [];
+
+    edges.forEach(e => {
+      const p1 = positions.get(e.source_account);
+      const p2 = positions.get(e.destination_account);
+      if (!p1 || !p2) return;
+      const x1 = p1.x + CARD_W, y1 = p1.y + CARD_H / 2;
+      const x2 = p2.x - 6, y2 = p2.y + CARD_H / 2;
+      const dx = Math.max(40, (x2 - x1) * 0.5);
+      // Plain curved line — no arrowhead. Direction is communicated by
+      // the moving glow dot instead, colored to match the money's
+      // origin at this hop (e.g. green while it's still leaving a
+      // source account, amber once it's inside mule territory).
+      const path = `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
+      const pathId = 'edgepath-' + (edgeCounter++);
+
+      const pathEl = svgEl('path', {
+        d: path, id: pathId, fill: 'none',
+        stroke: 'rgba(148,163,184,0.35)', 'stroke-width': '2'
+      });
+      svg.appendChild(pathEl);
+
+      const role = accountRole.get(e.source_account) || 'PEER';
+      const dotColor = ROLE_COLOR[role] || ROLE_COLOR.PEER;
+
+      // Set via style (not the fill attribute) so the browser's CSS
+      // engine resolves the var(--role-*) custom property correctly.
+      const dot = svgEl('circle', { r: '4.5', filter: 'url(#glowDot)' });
+      dot.style.fill = dotColor;
+      const anim = svgEl('animateMotion', {
+        dur: (2.2 + Math.random() * 1.2).toFixed(2) + 's',
+        repeatCount: 'indefinite'
+      });
+      const mpath = svgEl('mpath', {});
+      mpath.setAttributeNS('http://www.w3.org/1999/xlink', 'href', '#' + pathId);
+      anim.appendChild(mpath);
+      dot.appendChild(anim);
+      svg.appendChild(dot);
+
+      // Offset above the path's midpoint rather than sitting on top
+      // of it — otherwise the label box hides the line itself and
+      // blocks the view of the glow dot as it travels past.
+      const midX = (x1 + x2) / 2, midY = (y1 + y2) / 2 - 16;
+      const amt = (e.amount != null) ? '₹' + Number(e.amount).toLocaleString('en-IN', {maximumFractionDigits:0}) : '';
+      labels.push({ x: midX, y: midY, text: [amt, e.mode].filter(Boolean).join(' · ') });
+    });
+
+    container.appendChild(svg);
+
+    accounts.forEach(a => {
+      const pos = positions.get(a.account_id);
+      if (!pos) return;
+      const card = document.createElement('div');
+      card.className = 'acct-card';
+      card.style.left = pos.x + 'px';
+      card.style.top = pos.y + 'px';
+      const color = ROLE_COLOR[a.role] || ROLE_COLOR.PEER;
+      const roleLabel = ROLE_LABEL[a.role] || a.role || 'Account';
+      card.innerHTML = `
+        <div class="acct-strip" style="background:${color}"></div>
+        <div class="acct-body">
+          <div class="acct-id">${escapeHtml(a.account_id)}</div>
+          <div class="acct-role" style="color:${color}">${escapeHtml(roleLabel)}</div>
+        </div>`;
+      container.appendChild(card);
+    });
+
+    labels.forEach(l => {
+      const lbl = document.createElement('div');
+      lbl.className = 'edge-label';
+      lbl.style.left = l.x + 'px';
+      lbl.style.top = l.y + 'px';
+      lbl.textContent = l.text;
+      container.appendChild(lbl);
+    });
+
+    enablePan(container.parentElement);
+  }
+
+  // Click-and-drag panning for the graph canvas — no need to hunt
+  // for a scrollbar, just grab the graph and move it.
+  function enablePan(el){
+    if (!el || el.dataset.panEnabled) return;
+    el.dataset.panEnabled = '1';
+    el.classList.add('pannable');
+
+    let dragging = false, startX = 0, startY = 0, startLeft = 0, startTop = 0;
+
+    el.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return;
+      dragging = true;
+      el.classList.add('panning');
+      startX = e.pageX;
+      startY = e.pageY;
+      startLeft = el.scrollLeft;
+      startTop = el.scrollTop;
+    });
+    window.addEventListener('mousemove', (e) => {
+      if (!dragging) return;
+      e.preventDefault();
+      el.scrollLeft = startLeft - (e.pageX - startX);
+      el.scrollTop = startTop - (e.pageY - startY);
+    });
+    window.addEventListener('mouseup', () => {
+      if (!dragging) return;
+      dragging = false;
+      el.classList.remove('panning');
+    });
+  }
+
+  function escapeHtml(s){
+    return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  /* ===================== TRACE VIEW ===================== */
+  const searchInput = document.getElementById('searchInput');
+  const traceBtn = document.getElementById('traceBtn');
+  const traceResults = document.getElementById('traceResults');
+
+  async function runTrace(){
+    const q = searchInput.value.trim();
+    if (!q) return;
+    traceResults.innerHTML = `<div class="panel"><div class="empty-state"><div class="glyph">◔</div><h3>Tracing…</h3><p>Querying live graph for "${escapeHtml(q)}"</p></div></div>`;
+    try {
+      const data = await api('/api/trace?q=' + encodeURIComponent(q));
+      renderTraceResult(data);
+    } catch (e) {
+      traceResults.innerHTML = `<div class="panel"><div class="empty-state"><div class="glyph">⚠</div><h3>Trace failed</h3><p>${escapeHtml(e.message)}</p></div></div>`;
+      showToast('Trace failed: ' + e.message);
+    }
+  }
+  traceBtn.addEventListener('click', runTrace);
+  searchInput.addEventListener('keydown', e => { if (e.key === 'Enter') runTrace(); });
+
+  function renderTraceResult(data){
+    const badgeClass = 'match-' + (data.match_type || 'none');
+    let html = `<div class="panel">`;
+    html += `<span class="match-badge ${badgeClass}">${escapeHtml((data.match_type||'none').toUpperCase())} MATCH</span>`;
+
+    if (data.match_type === 'none') {
+      html += `<div class="empty-state"><div class="glyph">∅</div><h3>Nothing found</h3><p>No account, transaction or scenario matches "${escapeHtml(data.query)}".</p></div>`;
+      html += `</div>`;
+      traceResults.innerHTML = html;
+      return;
+    }
+
+    // Build ego-network graph for an account match
+    let accounts = [], edges = [];
+    if (data.account) {
+      const focusId = data.account.account.account_id;
+      accounts.push({ account_id: focusId, role: 'FOCUS' });
+      (data.account.incoming || []).forEach(tx => {
+        if (!accounts.find(a => a.account_id === tx.source_account)) {
+          accounts.push({ account_id: tx.source_account, role: 'PEER' });
+        }
+        edges.push({ source_account: tx.source_account, destination_account: focusId,
+          amount: tx.amount, mode: tx.mode, transaction_id: tx.transaction_id, timestamp: tx.timestamp });
+      });
+      (data.account.outgoing || []).forEach(tx => {
+        if (!accounts.find(a => a.account_id === tx.destination_account)) {
+          accounts.push({ account_id: tx.destination_account, role: 'PEER' });
+        }
+        edges.push({ source_account: focusId, destination_account: tx.destination_account,
+          amount: tx.amount, mode: tx.mode, transaction_id: tx.transaction_id, timestamp: tx.timestamp });
+      });
+
+      html += `<div id="traceGraphWrap" class="graph-scroll" style="margin-top:6px;"><div class="graph-canvas" id="traceGraph"></div></div>`;
+      html += `<div class="legend"><span><i style="background:var(--role-focus)"></i>Searched account</span><span><i style="background:var(--role-peer)"></i>Counterparty</span></div>`;
+    } else if (data.transaction) {
+      const t = data.transaction;
+      accounts = [
+        { account_id: t.source_account || 'UNKNOWN_SRC', role: 'PEER' },
+        { account_id: t.destination_account || 'UNKNOWN_DST', role: 'PEER' }
+      ];
+      edges = [{ source_account: accounts[0].account_id, destination_account: accounts[1].account_id,
+        amount: t.amount, mode: t.mode, transaction_id: t.transaction_id }];
+      html += `<div id="traceGraphWrap" class="graph-scroll" style="margin-top:6px;"><div class="graph-canvas" id="traceGraph"></div></div>`;
+    }
+
+    if (data.scenarios && data.scenarios.length) {
+      html += `<div style="margin-top:18px;"><div class="panel-title" style="margin-bottom:10px;">Related scenarios (${data.scenarios.length})</div><div class="chips" id="traceScenarioChips"></div></div>`;
+    }
+
+    html += `</div>`;
+    traceResults.innerHTML = html;
+
+    const graphMount = document.getElementById('traceGraph');
+    if (graphMount) renderGraph(graphMount, accounts, edges);
+
+    if (data.scenarios && data.scenarios.length) {
+      const chipWrap = document.getElementById('traceScenarioChips');
+      data.scenarios.forEach(s => {
+        const chip = document.createElement('button');
+        chip.className = 'chip';
+        chip.style.border = 'none';
+        chip.innerHTML = `<span class="mono">${escapeHtml(s.alert_id)}</span><span class="p-tag pat-${escapeHtml(s.pattern||'')}" style="background:none;">${escapeHtml(s.pattern||'')}</span>`;
+        chip.addEventListener('click', () => openScenarioModal(s.alert_id));
+        chipWrap.appendChild(chip);
+      });
+    }
+  }
+
+  /* ===================== SCENARIOS LIST ===================== */
+  const scenarioGrid = document.getElementById('scenarioGrid');
+  let knownScenarioIds = new Set();
+  let scenariosBooted = false;
+
+  async function loadScenarios(){
+    try {
+      const data = await api('/api/scenarios?limit=100');
+      renderScenarioGrid(data.scenarios || []);
+    } catch(e) {
+      scenarioGrid.innerHTML = `<div class="panel" style="grid-column:1/-1;"><div class="empty-state"><div class="glyph">⚠</div><h3>Could not load scenarios</h3><p>${escapeHtml(e.message)}</p></div></div>`;
+    }
+  }
+
+  function relTime(iso){
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (isNaN(d)) return '';
+    const s = Math.floor((Date.now() - d.getTime()) / 1000);
+    if (s < 60) return s + 's ago';
+    if (s < 3600) return Math.floor(s/60) + 'm ago';
+    if (s < 86400) return Math.floor(s/3600) + 'h ago';
+    return Math.floor(s/86400) + 'd ago';
+  }
+
+  function renderScenarioGrid(scenarios){
+    if (!scenarios.length) {
+      scenarioGrid.innerHTML = `<div class="panel" style="grid-column:1/-1;"><div class="empty-state"><div class="glyph">◌</div><h3>No scenarios yet</h3><p>Detected mule chains will appear here live as the detector finds them.</p></div></div>`;
+      return;
+    }
+    const isFirstLoad = !scenariosBooted;
+    scenarioGrid.innerHTML = '';
+    scenarios.forEach(s => {
+      const isNew = !isFirstLoad && !knownScenarioIds.has(s.alert_id);
+      const card = document.createElement('div');
+      card.className = 'scn-card' + (isNew ? ' is-new' : '');
+      const finals = (s.final_accounts || []).join(', ');
+      card.innerHTML = `
+        <div class="scn-top">
+          <span class="scn-id mono">${escapeHtml(s.alert_id)}</span>
+          <span class="scn-pattern pat-${escapeHtml(s.pattern||'')}">${escapeHtml(s.pattern||'—')}</span>
+        </div>
+        <div class="scn-flow">
+          <span class="src">${escapeHtml(s.source_account||'?')}</span><span class="arrow">→</span>
+          <span class="mul">${escapeHtml(s.mule_account||'?')}</span><span class="arrow">→</span>
+          <span class="fin">${escapeHtml(finals||'?')}</span>
+        </div>
+        <div class="scn-meta">
+          <span>${relTime(s.detected_at)}</span>
+          <span class="scn-states">${(s.states||[]).slice(0,3).map(st=>`<span class="state-tag">${escapeHtml(st)}</span>`).join('')}</span>
+        </div>`;
+      card.addEventListener('click', () => openScenarioModal(s.alert_id));
+      scenarioGrid.appendChild(card);
+      knownScenarioIds.add(s.alert_id);
+    });
+    scenariosBooted = true;
+  }
+
+  setInterval(() => { if (drawerOpen) loadScenarios(); }, 5000);
+
+  /* ===================== MODAL ===================== */
+  const modalVeil = document.getElementById('modalVeil');
+  const modalTitle = document.getElementById('modalTitle');
+  const modalSub = document.getElementById('modalSub');
+  const modalStats = document.getElementById('modalStats');
+  const modalGraph = document.getElementById('modalGraph');
+  const txToggle = document.getElementById('txToggle');
+  const txTableWrap = document.getElementById('txTableWrap');
+
+  document.getElementById('modalClose').addEventListener('click', closeModal);
+  modalVeil.addEventListener('click', e => { if (e.target === modalVeil) closeModal(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+  function closeModal(){
+    modalVeil.classList.remove('open');
+    txTableWrap.style.display = 'none';
+    txToggle.textContent = 'Show transaction ledger ▾';
+  }
+
+  txToggle.addEventListener('click', () => {
+    const show = txTableWrap.style.display === 'none';
+    txTableWrap.style.display = show ? 'block' : 'none';
+    txToggle.textContent = show ? 'Hide transaction ledger ▴' : 'Show transaction ledger ▾';
+  });
+
+  async function openScenarioModal(alertId){
+    modalVeil.classList.add('open');
+    modalTitle.textContent = alertId;
+    modalSub.textContent = 'Loading live scenario data…';
+    modalStats.innerHTML = '';
+    modalGraph.innerHTML = '';
+    txTableWrap.innerHTML = '';
+    try {
+      const data = await api('/api/scenarios/' + encodeURIComponent(alertId));
+      renderModal(data);
+    } catch(e) {
+      modalSub.textContent = 'Failed to load: ' + e.message;
+    }
+  }
+
+  function renderModal(data){
+    const s = data.scenario;
+    modalSub.textContent = `${s.pattern || ''} pattern · detected ${relTime(s.detected_at)} · ${data.accounts.length} accounts · ${data.transactions.length} transactions`;
+
+    const total = (data.transactions || []).reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+    modalStats.innerHTML = `
+      <div class="pill">Total moved<b>₹${total.toLocaleString('en-IN',{maximumFractionDigits:0})}</b></div>
+      <div class="pill">Source<b class="mono">${escapeHtml(s.source_account||'—')}</b></div>
+      <div class="pill">Mule<b class="mono">${escapeHtml(s.mule_account||'—')}</b></div>
+      <div class="pill">Final<b class="mono">${escapeHtml((s.final_accounts||[]).join(', ')||'—')}</b></div>
+      ${(s.states||[]).map(st => `<div class="pill">${escapeHtml(st)}</div>`).join('')}
+    `;
+
+    renderGraph(modalGraph, data.accounts, data.transactions);
+
+    let rows = '';
+    (data.transactions || []).forEach(t => {
+      rows += `<tr>
+        <td>${escapeHtml(t.transaction_id)}</td>
+        <td>${escapeHtml(t.source_account)}</td>
+        <td>${escapeHtml(t.destination_account)}</td>
+        <td>₹${Number(t.amount||0).toLocaleString('en-IN',{maximumFractionDigits:0})}</td>
+        <td><span class="mode-tag">${escapeHtml(t.mode||'—')}</span></td>
+        <td>${escapeHtml(t.status||'—')}</td>
+      </tr>`;
+    });
+    txTableWrap.innerHTML = `<table class="tx-table">
+      <thead><tr><th>Transaction</th><th>Source</th><th>Destination</th><th>Amount</th><th>Mode</th><th>Status</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+  }
+
+  /* ===================== INITIAL EMPTY STATE ===================== */
+  traceResults.innerHTML = `<div class="panel"><div class="empty-state"><div class="glyph">⌕</div><h3>Search to trace a chain</h3><p>Enter an account ID, transaction ID, or alert ID above, then click Trace.</p></div></div>`;
+
+})();
+</script>
+</body>
+</html>
