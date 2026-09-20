@@ -1,0 +1,80 @@
+Created At: 2026-09-19T23:41:09+05:30
+Completed At: 2026-09-19T23:41:09+05:30
+File Path: `file:///c:/Users/Pratik/Desktop/SIH%20VS/New/index.html`
+Total Lines: 2363
+Total Bytes: 102529
+Showing lines 640 to 730
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+640:     .map-canvas-area{ height:320px; }
+641:     .map-atm-sidebar{ width:100%; height:260px; border-left:none; border-top:1px solid var(--border-strong); }
+642:   }
+643: </style>
+644: </head>
+645: <body>
+646: 
+647: <div class="shell">
+648: 
+649:   <div class="topbar">
+650:     <div class="brand">
+651:       <div class="brand-mark">CT</div>
+652:       <div>
+653:         <h1>CHAINTRACE</h1>
+654:         <p>Live money-mule chain tracer &middot; UPI / IMPS / NEFT / RTGS</p>
+655:       </div>
+656:     </div>
+657:     <div class="status-cluster">
+658:       <div class="pill"><span class="dot" id="healthDot"></span><span id="healthLabel">connecting…</span></div>
+659:       <div class="pill">Scenarios<b id="statScenarios">–</b></div>
+660:       <div class="pill">Accounts<b id="statAccounts">–</b></div>
+661:       <div class="pill">Transactions<b id="statTx">–</b></div>
+662:       <button class="cfg-btn" id="cfgBtn" title="Backend settings">&#9881;</button>
+663:     </div>
+664:   </div>
+665: 
+666:   <div class="cfg-pop" id="cfgPop">
+667:     <label>Backend base URL</label>
+668:     <input id="cfgUrl" class="mono" placeholder="http://localhost:8000" />
+669:     <button id="cfgSave">Save &amp; reconnect</button>
+670:   </div>
+671: 
+672:   <!-- ===================== TRACE VIEW ===================== -->
+673:   <div id="view-trace">
+674:     <div class="search-row">
+675:       <div class="search-box">
+676:         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></sv
+<truncated 894 bytes>
+697:   <div class="scn-drawer" id="scnDrawer">
+698:     <div class="drawer-head">
+699:       <div>
+700:         <h2>Scenarios</h2>
+701:         <p class="drawer-sub"><span class="dot live" style="width:6px;height:6px;"></span>live &middot; updates every 5s</p>
+702:       </div>
+703:       <button class="modal-close" id="drawerClose">&times;</button>
+704:     </div>
+705:     <div class="drawer-body">
+706:       <div id="scenarioGrid" class="scenario-grid"></div>
+707:     </div>
+708:   </div>
+709: </div>
+710: 
+711: <!-- ===================== MODAL ===================== -->
+712: <div class="modal-veil" id="modalVeil">
+713:   <div class="modal" id="scenarioModal">
+714:     <div class="modal-head" title="Double click header to toggle Fullscreen">
+715:       <div>
+716:         <h2 id="modalTitle">SCN-XXXXXXXX</h2>
+717:         <p class="modal-sub" id="modalSub">Loading scenario…</p>
+718:       </div>
+719:       <div class="modal-actions">
+720:         <button class="modal-btn" id="modalFullscreenBtn" title="Toggle Fullscreen (F)">
+721:           <svg class="fs-icon-expand" id="fsIconExpand" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+722:             <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>
+723:           </svg>
+724:           <svg class="fs-icon-compress" id="fsIconCompress" style="display:none;" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+725:             <path d="M4 14h6v6M20 10h-6V4M14 10l7-7M10 14l-7 7"/>
+726:           </svg>
+727:           <span id="modalFullscreenLabel">Fullscreen</span>
+728:         </button>
+729:         <button class="modal-close" id="modalClose" title="Close (Esc)">&times;</button>
+730:       </div>
+The above content does NOT show the entire file contents. If you need to view any lines of the file which were not shown to complete your task, call this tool again to view those lines.

@@ -1,0 +1,808 @@
+Created At: 2026-09-19T19:56:40+05:30
+Completed At: 2026-09-19T19:56:41+05:30
+File Path: `file:///c:/Users/Pratik/Desktop/SIH%20VS/New/index.html`
+Total Lines: 1554
+Total Bytes: 69140
+Showing lines 1 to 800
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+1: <!DOCTYPE html>
+2: <html lang="en">
+3: <head>
+4: <meta charset="UTF-8" />
+5: <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+6: <title>CHAINTRACE — Live Mule-Chain Tracer</title>
+7: <link rel="preconnect" href="https://fonts.googleapis.com">
+8: <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+9: <!-- Leaflet Map CSS & JS -->
+10: <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+11: <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+12: <style>
+13:   :root{
+14:     --bg:            #0a0e17;
+15:     --panel:         #10151f;
+16:     --panel-2:       #141b28;
+17:     --border:        rgba(255,255,255,0.07);
+18:     --border-strong: rgba(255,255,255,0.14);
+19:     --text:          #e7eaf1;
+20:     --muted:         #7c8598;
+21:     --muted-2:       #545d70;
+22:     --accent:        #22d3ee;
+23:     --accent-dim:    rgba(34,211,238,0.15);
+24:     --danger:        #f43f5e;
+25:     --ok:            #34d399;
+26: 
+27:     --role-source:   #34d399;
+28:     --role-mule:     #f5a524;
+29:     --role-chain:    #38bdf8;
+30:     --role-final:    #f43f5e;
+31:     --role-focus:    #a78bfa;
+32:     --role-peer:     #8b93a7;
+33: 
+34:     --card-w: 216px;
+35:     --card-h: 76px;
+36:   }
+37:   *{ box-sizing:border-box; }
+38:   html,body{
+39:     margin:0; padding:0; height:100%;
+40:     background:
+41:       radial-gradient(1200px 600px at 15% -10%, rgba(34,211,238,0.06), transparent 60%),
+42:       radial-gradient(900px 500px at 100% 0%, rgba(167,139,250,0.05), transparent 55%),
+43:       var(--bg);
+44:     color:var(--text);
+45:     font-family:'Space Grotesk', 'Segoe UI', sans-serif;
+46:     -webkit-font-smoothing:antialiased;
+47:   }
+48:   .mono{ font-family:'JetBrains Mono', monospace; }
+49:   ::selection{ background:var(--accent-dim); }
+50:   ::-webkit-scrollbar{ width:10px; height:10px; }
+51:   ::-webkit-scrollbar-thumb{ background:var(--border-strong); border-radius:6px; }
+52:   ::-webkit-scrollbar-track{ background:transparent; }
+53: 
+54:   a{ color:inherit; }
+55:   button{ font-family:inherit; cursor:pointer; }
+56: 
+57:   /* ---------- shell ---------- */
+58:   .shell{ max-width:1360px; margin:0 auto; padding:22px 26px 60px; }
+59: 
+60:   .topbar{
+61:     display:flex; align-items:center; justify-content:space-between;
+62:     gap:16px; margin-bottom:20px; flex-wrap:wrap;
+63:   }
+64:   .brand{ display:flex; align-items:center; gap:12px; }
+65:   .brand-mark{
+66:     width:38px; height:38px; border-radius:10px;
+67:     background:linear-gradient(135deg, var(--accent), #6366f1);
+68:     display:flex; align-items:center; justify-content:center;
+69:     font-weight:700; font-size:16px; color:#04121a;
+70:     box-shadow:0 0 22px rgba(34,211,238,0.35);
+71:     flex-shrink:0;
+72:   }
+73:   .brand h1{ font-size:19px; margin:0; letter-spacing:0.2px; font-weight:700; }
+74:   .brand p{ margin:1px 0 0; font-size:12px; color:var(--muted); }
+75: 
+76:   .status-cluster{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+77:   .pill{
+78:     display:flex; align-items:center; gap:7px;
+79:     background:var(--panel); border:1px solid var(--border);
+80:     padding:7px 12px; border-radius:999px; font-size:12.5px; color:var(--muted);
+81:     white-space:nowrap;
+82:   }
+83:   .pill b{ color:var(--text); font-weight:600; margin-left:2px; }
+84:   .dot{ width:8px; height:8px; border-radius:50%; background:var(--muted-2); flex-shrink:0; }
+85:   .dot.live{ background:var(--ok); box-shadow:0 0 8px rgba(52,211,153,0.9); animation:pulse 1.8s infinite; }
+86:   .dot.down{ background:var(--danger); box-shadow:0 0 8px rgba(244,63,94,0.9); }
+87:   @keyframes pulse{ 0%,100%{ opacity:1; } 50%{ opacity:0.45; } }
+88: 
+89:   .cfg-btn{
+90:     background:var(--panel); border:1px solid var(--border); color:var(--muted);
+91:     width:34px; height:34px; border-radius:9px; display:flex; align-items:center; justify-content:center;
+92:     font-size:15px; transition:.15s;
+93:   }
+94:   .cfg-btn:hover{ color:var(--text); border-color:var(--border-strong); }
+95: 
+96:   .cfg-pop{
+97:     position:absolute; right:26px; top:64px; z-index:60;
+98:     background:var(--panel-2); border:1px solid var(--border-strong);
+99:     border-radius:12px; padding:14px; width:300px;
+100:     box-shadow:0 20px 45px rgba(0,0,0,0.5);
+101:     display:none;
+102:   }
+103:   .cfg-pop.open{ display:block; }
+104:   .cfg-pop label{ font-size:11.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; }
+105:   .cfg-pop input{
+106:     width:100%; margin-top:6px; margin-bottom:10px;
+107:     background:var(--bg); border:1px solid var(--border); color:var(--text);
+108:     padding:9px 10px; border-radius:8px; font-size:13px; font-family:'JetBrains Mono',monospace;
+109:   }
+110:   .cfg-pop button{
+111:     width:100%; background:var(--accent); color:#04121a; border:none;
+112:     padding:9px; border-radius:8px; font-weight:600; font-size:13px;
+113:   }
+114: 
+115:   /* ---------- search ---------- */
+116:   .search-row{ display:flex; gap:10px; margin-bottom:18px; }
+117:   .search-box{
+118:     flex:1; display:flex; align-items:center; gap:10px;
+119:     background:var(--panel); border:1px solid var(--border); border-radius:11px;
+120:     padding:0 14px; transition:.15s;
+121:   }
+122:   .search-box:focus-within{ border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-dim); }
+123:   .search-box svg{ flex-shrink:0; opacity:.55; }
+124:   .search-box input{
+125:     flex:1; background:none; border:none; outline:none; color:var(--text);
+126:     padding:13px 0; font-size:14.5px; font-family:'JetBrains Mono', monospace;
+127:   }
+128:   .search-box input::placeholder{ color:var(--muted-2); font-family:'Space Grotesk',sans-serif; }
+129:   .trace-btn{
+130:     background:linear-gradient(135deg, var(--accent), #6366f1); border:none; color:#04121a;
+131:     font-weight:700; font-size:14.5px; padding:0 26px; border-radius:11px;
+132:     box-shadow:0 6px 20px rgba(34,211,238,0.25); transition:.15s;
+133:   }
+134:   .trace-btn:hover{ transform:translateY(-1px); box-shadow:0 8px 24px rgba(34,211,238,0.35); }
+135:   .trace-btn:active{ transform:translateY(0); }
+136:   .trace-hint{ font-size:12px; color:var(--muted-2); margin:-8px 0 18px 2px; }
+137: 
+138:   .panel{
+139:     background:var(--panel); border:1px solid var(--border); border-radius:14px;
+140:     padding:20px; margin-bottom:18px;
+141:   }
+142:   .panel-title{ font-size:13px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin:0 0 14px; font-weight:600; }
+143: 
+144:   .empty-state{
+145:     text-align:center; padding:50px 20px; color:var(--muted);
+146:   }
+147:   .empty-state .glyph{ font-size:34px; margin-bottom:10px; opacity:.5; }
+148:   .empty-state h3{ color:var(--text); font-size:15px; margin:0 0 6px; }
+149:   .empty-state p{ font-size:13px; margin:0; }
+150: 
+151:   .match-badge{
+152:     display:inline-block; font-size:11.5px; font-weight:700; letter-spacing:.05em;
+153:     padding:4px 10px; border-radius:999px; text-transform:uppercase; margin-bottom:14px;
+154:   }
+155:   .match-account{ background:rgba(52,211,153,.14); color:var(--role-source); }
+156:   .match-transaction{ background:rgba(56,189,248,.14); color:var(--role-chain); }
+157:   .match-scenario{ background:rgba(245,165,36,.14); color:var(--role-mule); }
+158:   .match-partial{ background:rgba(139,147,167,.14); color:var(--muted); }
+159:   .match-none{ background:rgba(244,63,94,.14); color:var(--danger); }
+160: 
+161:   .chips{ display:flex; flex-wrap:wrap; gap:8px; margin-top:6px; }
+162:   .chip{
+163:     background:var(--panel-2); border:1px solid var(--border); color:var(--text);
+164:     padding:8px 12px; border-radius:9px; font-size:12.5px; display:flex; gap:8px; align-items:center;
+165:     transition:.15s;
+166:   }
+167:   .chip:hover{ border-color:var(--accent); background:rgba(34,211,238,.06); }
+168:   .chip .p-tag{ font-size:10px; padding:2px 6px; border-radius:5px; font-weight:700; letter-spacing:.03em; }
+169: 
+170:   /* ---------- scenario grid ---------- */
+171:   .refresh-note{ font-size:11.5px; color:var(--muted-2); display:flex; align-items:center; gap:6px; }
+172: 
+173:   /* ---------- scenarios side button + drawer ---------- */
+174:   .scn-fab{
+175:     position:fixed; right:0; top:50%; transform:translateY(-50%);
+176:     display:flex; align-items:center; gap:9px;
+177:     background:var(--panel-2); border:1px solid var(--border-strong); border-right:none;
+178:     color:var(--text); padding:13px 16px 13px 14px; border-radius:12px 0 0 12px;
+179:     box-shadow:-10px 10px 30px rgba(0,0,0,0.4); z-index:70; font-weight:600; font-size:13.5px;
+180:     transition:.15s;
+181:   }
+182:   .scn-fab:hover{ padding-right:20px; background:#182131; }
+183:   .scn-fab-icon{ font-size:16px; }
+184:   .scn-fab-count{
+185:     background:var(--accent); color:#04121a; font-size:11px; font-weight:700;
+186:     min-width:20px; height:20px; padding:0 5px; border-radius:999px;
+187:     display:flex; align-items:center; justify-content:center;
+188:   }
+189: 
+190:   .drawer-veil{
+191:     position:fixed; inset:0; background:rgba(4,6,11,0.55); backdrop-filter:blur(2px);
+192:     display:none; z-index:90;
+193:   }
+194:   .drawer-veil.open{ display:block; }
+195:   .scn-drawer{
+196:     position:fixed; right:0; top:0; bottom:0; width:min(460px, 94vw);
+197:     background:var(--panel); border-left:1px solid var(--border-strong);
+198:     box-shadow:-24px 0 60px rgba(0,0,0,0.5);
+199:     display:flex; flex-direction:column; padding:20px;
+200:     transform:translateX(100%); transition:transform .25s ease;
+201:   }
+202:   .drawer-veil.open .scn-drawer{ transform:translateX(0); }
+203:   .drawer-head{ display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px; flex-shrink:0; }
+204:   .drawer-head h2{ margin:0 0 4px; font-size:18px; }
+205:   .drawer-sub{ margin:0; font-size:12px; color:var(--muted); display:flex; align-items:center; gap:6px; }
+206:   .drawer-body{ overflow-y:auto; flex:1; margin:0 -6px; padding:0 6px; }
+207: 
+208:   .scenario-grid{
+209:     display:grid; grid-template-columns:repeat(auto-fill, minmax(280px,1fr)); gap:14px;
+210:   }
+211:   .scn-card{
+212:     background:var(--panel); border:1px solid var(--border); border-radius:13px;
+213:     padding:16px; cursor:pointer; position:relative; overflow:hidden; transition:.15s;
+214:   }
+215:   .scn-card:hover{ border-color:var(--border-strong); transform:translateY(-2px); box-shadow:0 12px 30px rgba(0,0,0,0.35); }
+216:   .scn-card.is-new::before{
+217:     content:'NEW'; position:absolute; top:10px; right:10px; font-size:9.5px; font-weight:700;
+218:     letter-spacing:.06em; color:#04121a; background:var(--accent); padding:2px 7px; border-radius:5px;
+219:     animation:pulse 1.4s infinite;
+220:   }
+221:   .scn-top{ display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px; gap:8px; }
+222:   .scn-id{ font-family:'JetBrains Mono',monospace; font-size:13px; font-weight:600; }
+223:   .scn-pattern{
+224:     font-size:10px; font-weight:700; letter-spacing:.05em; padding:3px 8px; border-radius:5px; flex-shrink:0;
+225:   }
+226:   .pat-LINEAR{ background:rgba(56,189,248,.15); color:var(--role-chain); }
+227:   .pat-BRANCH{ background:rgba(245,165,36,.15); color:var(--role-mule); }
+228:   .pat-FAN-IN{ background:rgba(167,139,250,.15); color:var(--role-focus); }
+229:   .pat-MIXED{ background:rgba(244,63,94,.15); color:var(--role-final); }
+230: 
+231:   .scn-flow{ font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--muted); margin-bottom:12px; line-height:1.7; }
+232:   .scn-flow .arrow{ color:var(--muted-2); margin:0 4px; }
+233:   .scn-flow .src{ color:var(--role-source); }
+234:   .scn-flow .mul{ color:var(--role-mule); }
+235:   .scn-flow .fin{ color:var(--role-final); }
+236: 
+237:   .scn-meta{ display:flex; justify-content:space-between; align-items:center; font-size:11.5px; color:var(--muted-2); }
+238:   .scn-states{ display:flex; gap:5px; flex-wrap:wrap; }
+239:   .state-tag{ background:var(--panel-2); border:1px solid var(--border); padding:2px 7px; border-radius:5px; color:var(--muted); }
+240: 
+241:   /* ---------- graph canvas ---------- */
+242:   .graph-scroll{
+243:     overflow:auto; border-radius:12px;
+244:     background:#0b0f18;
+245:     border:1px solid var(--border); position:relative; min-height:220px;
+246:   }
+247:   .graph-scroll.pannable{ cursor:grab; }
+248:   .graph-scroll.panning{ cursor:grabbing; user-select:none; }
+249:   .graph-canvas{ position:relative; }
+250:   .graph-canvas svg{ position:absolute; top:0; left:0; overflow:visible; pointer-events:none; }
+251: 
+252:   .acct-card{
+253:     position:absolute; width:var(--card-w); height:var(--card-h);
+254:     background:linear-gradient(180deg, #151d2c, #10151f);
+255:     border:1px solid var(--border-strong); border-radius:10px;
+256:     display:flex; overflow:hidden;
+257:     box-shadow:0 8px 20px rgba(0,0,0,0.4);
+258:     transition:transform .15s, box-shadow .15s;
+259:   }
+260:   .acct-card:hover{ transform:translateY(-2px); box-shadow:0 14px 28px rgba(0,0,0,0.5); z-index:5; }
+261:   .acct-strip{ width:6px; flex-shrink:0; }
+262:   .acct-body{ flex:1; padding:11px 13px; display:flex; flex-direction:column; justify-content:center; gap:5px; min-width:0; }
+263:   .acct-id{ font-family:'JetBrains Mono',monospace; font-size:13.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+264:   .acct-role{ font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; }
+265: 
+266:   .edge-label{
+267:     position:absolute; font-family:'JetBrains Mono',monospace; font-size:11.5px; font-weight:600;
+268:     background:rgba(14,20,32,0.88); border:1px solid var(--border-strong); color:var(--text);
+269:     padding:2px 8px; border-radius:6px; white-space:nowrap; transform:translate(-50%,-50%);
+270:     pointer-events:none; box-shadow:0 4px 10px rgba(0,0,0,0.3); backdrop-filter:blur(2px);
+271:   }
+272: 
+273:   .legend{ display:flex; gap:16px; flex-wrap:wrap; margin-top:14px; font-size:12px; color:var(--muted); }
+274:   .legend span{ display:inline-flex; align-items:center; gap:6px; }
+275:   .legend i{ width:10px; height:10px; border-radius:3px; display:inline-block; }
+276: 
+277:   /* ---------- modal ---------- */
+278:   .modal-veil{
+279:     position:fixed; inset:0; background:rgba(4,6,11,0.72); backdrop-filter:blur(3px);
+280:     display:none; align-items:flex-start; justify-content:center; z-index:100; padding:40px 20px; overflow:auto;
+281:   }
+282:   .modal-veil.open{ display:flex; }
+283:   .modal{
+284:     background:var(--panel); border:1px solid var(--border-strong); border-radius:16px;
+285:     width:100%; max-width:1080px; padding:22px 24px 24px; box-shadow:0 30px 70px rgba(0,0,0,0.6);
+286:   }
+287:   .modal-head{ display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px; gap:10px; }
+288:   .modal-head h2{ margin:0; font-size:18px; font-family:'JetBrains Mono',monospace; }
+289:   .modal-sub{ color:var(--muted); font-size:12.5px; margin:4px 0 0; }
+290:   .modal-close{
+291:     background:var(--panel-2); border:1px solid var(--border); color:var(--muted);
+292:     width:32px; height:32px; border-radius:8px; font-size:16px; flex-shrink:0;
+293:   }
+294:   .modal-close:hover{ color:var(--text); }
+295:   .modal-stats{ display:flex; gap:10px; flex-wrap:wrap; margin:14px 0 16px; }
+296:   .modal-stats .pill{ font-size:11.5px; padding:6px 11px; }
+297: 
+298:   .tx-table{ width:100%; border-collapse:collapse; margin-top:16px; font-size:12.5px; }
+299:   .tx-table th{
+300:     text-align:left; color:var(--muted); font-weight:600; font-size:11px; text-transform:uppercase;
+301:     letter-spacing:.04em; padding:8px 10px; border-bottom:1px solid var(--border);
+302:   }
+303:   .tx-table td{ padding:9px 10px; border-bottom:1px solid var(--border); font-family:'JetBrains Mono',monospace; color:var(--text); }
+304:   .tx-table tr:last-child td{ border-bottom:none; }
+305:   .mode-tag{ font-size:10px; padding:2px 6px; border-radius:5px; background:var(--panel-2); color:var(--muted); font-family:'Space Grotesk',sans-serif; font-weight:600; }
+306: 
+307:   .details-toggle{ color:var(--accent); font-size:12.5px; background:none; border:none; margin-top:14px; font-weight:600; }
+308: 
+309:   .toast{
+310:     position:fixed; bottom:22px; left:50%; transform:translateX(-50%);
+311:     background:#1a1015; border:1px solid rgba(244,63,94,0.4); color:#fca5b1;
+312:     padding:11px 18px; border-radius:10px; font-size:13px; z-index:200; display:none;
+313:     box-shadow:0 10px 30px rgba(0,0,0,0.5);
+314:   }
+315:   .toast.show{ display:block; }
+316: 
+317:   /* ---------- modal tabs ---------- */
+318:   .modal-tabs{
+319:     display:flex; gap:6px; background:var(--panel-2); border:1px solid var(--border);
+320:     padding:4px; border-radius:11px; margin:16px 0; width:fit-content; max-width:100%; flex-wrap:wrap;
+321:   }
+322:   .modal-tab{
+323:     background:none; border:none; color:var(--muted); padding:8px 16px; border-radius:8px;
+324:     font-size:13px; font-weight:600; display:inline-flex; align-items:center; gap:8px;
+325:     transition:all .15s;
+326:   }
+327:   .modal-tab:hover{ color:var(--text); background:rgba(255,255,255,0.04); }
+328:   .modal-tab.active{
+329:     background:linear-gradient(135deg, rgba(34,211,238,0.16), rgba(99,102,241,0.16));
+330:     color:var(--accent); border:1px solid var(--accent-dim); box-shadow:0 4px 12px rgba(34,211,238,0.12);
+331:   }
+332:   .tab-badge{
+333:     background:rgba(244,63,94,0.2); color:var(--danger); font-size:10.5px;
+334:     padding:2px 7px; border-radius:999px; font-weight:700; letter-spacing:.02em;
+335:   }
+336: 
+337:   /* ---------- map view & atm tracker ---------- */
+338:   .map-view-wrap{
+339:     display:flex; border:1px solid var(--border-strong); border-radius:12px;
+340:     overflow:hidden; height:500px; background:#0a0e17; position:relative;
+341:   }
+342:   .map-canvas-area{ flex:1; position:relative; min-width:0; }
+343:   #modalMap{ width:100%; height:100%; background:#0a0e17; }
+344: 
+345:   .map-floating-bar{
+346:     position:absolute; top:12px; left:12px; z-index:400;
+347:     display:flex; gap:6px; background:rgba(16,21,31,0.92); backdrop-filter:blur(6px);
+348:     border:1px solid var(--border-strong); padding:5px 8px; border-radius:8px; box-shadow:0 8px 20px rgba(0,0,0,0.5);
+349:   }
+350:   .map-btn{
+351:     background:var(--panel-2); border:1px solid var(--border); color:var(--text);
+352:     padding:5px 10px; border-radius:6px; font-size:11.5px; font-weight:600; transition:.15s;
+353:   }
+354:   .map-btn:hover{ border-color:var(--accent); color:var(--accent); }
+355: 
+356:   .map-atm-sidebar{
+357:     width:340px; background:var(--panel-2); border-left:1px solid var(--border-strong);
+358:     display:flex; flex-direction:column; overflow:hidden; flex-shrink:0;
+359:   }
+360:   .atm-sidebar-header{
+361:     padding:14px 16px; border-bottom:1px solid var(--border); background:rgba(20,27,40,0.95);
+362:   }
+363:   .atm-sidebar-title{ font-size:13.5px; font-weight:700; color:var(--text); display:flex; align-items:center; gap:8px; }
+364:   .atm-sidebar-sub{ font-size:11.5px; color:var(--muted); margin-top:3px; }
+365:   .atm-list{ flex:1; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:10px; }
+366: 
+367:   .atm-card{
+368:     background:#0e131d; border:1px solid var(--border); border-radius:10px;
+369:     padding:12px; cursor:pointer; transition:.15s; position:relative;
+370:   }
+371:   .atm-card:hover{
+372:     border-color:var(--danger); transform:translateY(-1px);
+373:     box-shadow:0 8px 20px rgba(244,63,94,0.18);
+374:   }
+375:   .atm-card.active{
+376:     border-color:var(--danger); background:rgba(244,63,94,0.06);
+377:     box-shadow:0 0 0 1px var(--danger);
+378:   }
+379:   .atm-card-top{ display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px; gap:8px; }
+380:   .atm-card-id{ font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:700; color:var(--text); }
+381:   .atm-card-amount{
+382:     background:rgba(244,63,94,0.18); color:var(--danger); font-family:'JetBrains Mono',monospace;
+383:     font-size:11.5px; font-weight:700; padding:3px 7px; border-radius:5px;
+384:   }
+385:   .atm-card-bank{ font-size:12.5px; font-weight:600; color:var(--accent); margin-bottom:4px; }
+386:   .atm-card-address{ font-size:11.5px; color:var(--muted); line-height:1.4; margin-bottom:8px; }
+387:   .atm-card-footer{ display:flex; justify-content:space-between; align-items:center; font-size:11px; color:var(--muted-2); }
+388:   .cctv-online{ color:var(--ok); display:inline-flex; align-items:center; gap:4px; font-weight:600; }
+389:   .atm-actions{ display:flex; gap:6px; margin-top:8px; }
+390:   .atm-action-btn{
+391:     flex:1; padding:6px 8px; border-radius:6px; font-size:11px; font-weight:600;
+392:     border:1px solid var(--border); background:var(--panel-2); color:var(--text);
+393:     display:inline-flex; align-items:center; justify-content:center; gap:4px; text-decoration:none;
+394:     transition:.15s;
+395:   }
+396:   .atm-action-btn:hover{ border-color:var(--accent); color:var(--accent); background:rgba(34,211,238,0.06); }
+397:   .atm-action-btn.cctv-btn:hover{ border-color:var(--ok); color:var(--ok); background:rgba(52,211,153,0.06); }
+398: 
+399:   /* ---------- custom map marker beacons ---------- */
+400:   .atm-beacon{
+401:     position:relative; width:34px; height:34px;
+402:     display:flex; align-items:center; justify-content:center;
+403:   }
+404:   .atm-beacon-core{
+405:     width:28px; height:28px; border-radius:50%;
+406:     background:#f43f5e; color:#ffffff;
+407:     display:flex; align-items:center; justify-content:center;
+408:     font-size:13px; box-shadow:0 0 16px rgba(244,63,94,0.9);
+409:     border:2px solid #ffffff; z-index:2;
+410:   }
+411:   .atm-beacon-ring{
+412:     position:absolute; inset:-4px; border-radius:50%;
+413:     border:2px solid rgba(244,63,94,0.85);
+414:     animation:atmBeaconPulse 1.8s infinite ease-out;
+415:   }
+416:   @keyframes atmBeaconPulse{
+417:     0%{ transform:scale(0.6); opacity:1; }
+418:     100%{ transform:scale(2.0); opacity:0; }
+419:   }
+420: 
+421:   .atm-beacon.secondary .atm-beacon-core{
+422:     background:#f59e0b; box-shadow:0 0 14px rgba(245,158,11,0.8);
+423:   }
+424:   .atm-beacon.secondary .atm-beacon-ring{
+425:     border:2px solid rgba(245,158,11,0.85);
+426:   }
+427:   .atm-beacon.tertiary .atm-beacon-core{
+428:     background:#a78bfa; box-shadow:0 0 14px rgba(167,139,250,0.8);
+429:   }
+430:   .atm-beacon.tertiary .atm-beacon-ring{
+431:     border:2px solid rgba(167,139,250,0.85);
+432:   }
+433: 
+434:   .prob-badge{
+435:     font-size:10.5px; font-weight:700; padding:2px 7px; border-radius:4px;
+436:     letter-spacing:.03em; font-family:'JetBrains Mono',monospace;
+437:   }
+438:   .prob-high{ background:rgba(244,63,94,0.22); color:#f43f5e; border:1px solid rgba(244,63,94,0.4); }
+439:   .prob-med{ background:rgba(245,158,11,0.22); color:#f59e0b; border:1px solid rgba(245,158,11,0.4); }
+440:   .prob-low{ background:rgba(167,139,250,0.18); color:#a78bfa; border:1px solid rgba(167,139,250,0.35); }
+441: 
+442:   .risk-pill{
+443:     display:inline-flex; align-items:center; gap:4px;
+444:     font-size:10.5px; font-weight:700; padding:2px 7px; border-radius:4px;
+445:     letter-spacing:.03em; font-family:'JetBrains Mono',monospace; margin-top:4px;
+446:   }
+447:   .risk-pill.high{ background:rgba(244,63,94,0.15); color:#f43f5e; border:1px solid rgba(244,63,94,0.3); }
+448:   .risk-pill.med{ background:rgba(245,158,11,0.15); color:#f59e0b; border:1px solid rgba(245,158,11,0.3); }
+449:   .risk-pill.low{ background:rgba(167,139,250,0.12); color:#a78bfa; border:1px solid rgba(167,139,250,0.25); }
+450: 
+451:   .distance-pill{
+452:     font-size:11px; color:#cbd5e1; font-family:'JetBrains Mono',monospace;
+453:     display:inline-flex; align-items:center; gap:3px;
+454:   }
+455:   .window-pill{
+456:     font-size:10.5px; color:#f59e0b; background:rgba(245,158,11,0.1);
+457:     border:1px solid rgba(245,158,11,0.2); padding:2px 6px; border-radius:4px; margin-top:5px;
+458:     display:inline-block;
+459:   }
+460: 
+461:   .node-beacon{
+462:     position:relative; width:28px; height:28px;
+463:     display:flex; align-items:center; justify-content:center;
+464:   }
+465:   .node-beacon-core{
+466:     width:22px; height:22px; border-radius:50%;
+467:     display:flex; align-items:center; justify-content:center;
+468:     font-size:11px; font-weight:700; color:#04121a;
+469:     border:2px solid rgba(255,255,255,0.8); z-index:2;
+470:   }
+471:   .node-beacon-ring{
+472:     position:absolute; inset:-3px; border-radius:50%;
+473:     animation:atmBeaconPulse 2s infinite ease-out;
+474:   }
+475: 
+476:   .beacon-suspect .node-beacon-core{ background:#f43f5e; box-shadow:0 0 16px #f43f5e; font-size:12px; }
+477:   .beacon-suspect .node-beacon-ring{ border:2px solid #f43f5e; }
+478:   .beacon-source .node-beacon-core{ background:var(--role-source); box-shadow:0 0 14px var(--role-source); }
+479:   .beacon-source .node-beacon-ring{ border:2px solid var(--role-source); }
+480:   .beacon-mule .node-beacon-core{ background:var(--role-mule); box-shadow:0 0 14px var(--role-mule); }
+481:   .beacon-mule .node-beacon-ring{ border:2px solid var(--role-mule); }
+482:   .beacon-chain .node-beacon-core{ background:var(--role-chain); box-shadow:0 0 14px var(--role-chain); }
+483:   .beacon-chain .node-beacon-ring{ border:2px solid var(--role-chain); }
+484:   .beacon-server .node-beacon-core{ background:#a78bfa; box-shadow:0 0 14px #a78bfa; }
+485:   .beacon-server .node-beacon-ring{ border:2px solid #a78bfa; }
+486: 
+487:   /* Leaflet custom dark theme */
+488:   .leaflet-popup-content-wrapper{
+489:     background:#10151f !important; color:#e7eaf1 !important;
+490:     border:1px solid var(--border-strong) !important; border-radius:10px !important;
+491:     box-shadow:0 14px 35px rgba(0,0,0,0.6) !important;
+492:   }
+493:   .leaflet-popup-tip{ background:#10151f !important; }
+494:   .leaflet-popup-content{ margin:12px 14px !important; font-family:'Space Grotesk',sans-serif !important; }
+495:   .leaflet-container{ font-family:'Space Grotesk',sans-serif !important; }
+496: 
+497:   @media (max-width:720px){
+498:     .shell{ padding:16px; }
+499:     .search-row{ flex-direction:column; }
+500:     .trace-btn{ padding:13px; }
+501:     .map-view-wrap{ flex-direction:column; height:auto; }
+502:     .map-canvas-area{ height:320px; }
+503:     .map-atm-sidebar{ width:100%; height:260px; border-left:none; border-top:1px solid var(--border-strong); }
+504:   }
+505: </style>
+506: </head>
+507: <body>
+508: 
+509: <div class="shell">
+510: 
+511:   <div class="topbar">
+512:     <div class="brand">
+513:       <div class="brand-mark">CT</div>
+514:       <div>
+515:         <h1>CHAINTRACE</h1>
+516:         <p>Live money-mule chain tracer &middot; UPI / IMPS / NEFT / RTGS</p>
+517:       </div>
+518:     </div>
+519:     <div class="status-cluster">
+520:       <div class="pill"><span class="dot" id="healthDot"></span><span id="healthLabel">connecting…</span></div>
+521:       <div class="pill">Scenarios<b id="statScenarios">–</b></div>
+522:       <div class="pill">Accounts<b id="statAccounts">–</b></div>
+523:       <div class="pill">Transactions<b id="statTx">–</b></div>
+524:       <button class="cfg-btn" id="cfgBtn" title="Backend settings">&#9881;</button>
+525:     </div>
+526:   </div>
+527: 
+528:   <div class="cfg-pop" id="cfgPop">
+529:     <label>Backend base URL</label>
+530:     <input id="cfgUrl" class="mono" placeholder="http://localhost:8000" />
+531:     <button id="cfgSave">Save &amp; reconnect</button>
+532:   </div>
+533: 
+534:   <!-- ===================== TRACE VIEW ===================== -->
+535:   <div id="view-trace">
+536:     <div class="search-row">
+537:       <div class="search-box">
+538:         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+539:         <input id="searchInput" class="mono" placeholder="Account ID, transaction ID, or alert ID… e.g. ACCT-4821" />
+540:       </div>
+541:       <button class="trace-btn" id="traceBtn">Trace</button>
+542:     </div>
+543:     <div class="trace-hint">Searches accounts, transactions and detected scenarios across the live graph.</div>
+544: 
+545:     <div id="traceResults"></div>
+546:   </div>
+547: 
+548: </div>
+549: 
+550: <!-- ===================== SCENARIOS SIDE BUTTON ===================== -->
+551: <button class="scn-fab" id="scenarioFab" title="View detected scenarios">
+552:   <span class="scn-fab-icon">⛓</span>
+553:   <span class="scn-fab-text">Scenarios</span>
+554:   <span class="scn-fab-count" id="scenarioFabCount">–</span>
+555: </button>
+556: 
+557: <!-- ===================== SCENARIOS DRAWER ===================== -->
+558: <div class="drawer-veil" id="drawerVeil">
+559:   <div class="scn-drawer" id="scnDrawer">
+560:     <div class="drawer-head">
+561:       <div>
+562:         <h2>Scenarios</h2>
+563:         <p class="drawer-sub"><span class="dot live" style="width:6px;height:6px;"></span>live &middot; updates every 5s</p>
+564:       </div>
+565:       <button class="modal-close" id="drawerClose">&times;</button>
+566:     </div>
+567:     <div class="drawer-body">
+568:       <div id="scenarioGrid" class="scenario-grid"></div>
+569:     </div>
+570:   </div>
+571: </div>
+572: 
+573: <!-- ===================== MODAL ===================== -->
+574: <div class="modal-veil" id="modalVeil">
+575:   <div class="modal">
+576:     <div class="modal-head">
+577:       <div>
+578:         <h2 id="modalTitle">SCN-XXXXXXXX</h2>
+579:         <p class="modal-sub" id="modalSub">Loading scenario…</p>
+580:       </div>
+581:       <button class="modal-close" id="modalClose">&times;</button>
+582:     </div>
+583:     <div class="modal-stats" id="modalStats"></div>
+584: 
+585:     <!-- Modal View Tabs -->
+586:     <div class="modal-tabs" id="modalTabs">
+587:       <button class="modal-tab active" id="tabGraph"><span class="tab-icon">⬡</span> Flow Graph</button>
+588:       <button class="modal-tab" id="tabMap"><span class="tab-icon">🗺️</span> Track ATMs on Map <span class="tab-badge" id="modalAtmCount">0 ATMs</span></button>
+589:       <button class="modal-tab" id="tabLedger"><span class="tab-icon">📋</span> Transaction Ledger</button>
+590:     </div>
+591: 
+592:     <!-- 1. Flow Graph Section -->
+593:     <div id="modalGraphSection">
+594:       <div class="graph-scroll" id="modalGraphWrap" style="height:420px;">
+595:         <div class="graph-canvas" id="modalGraph"></div>
+596:       </div>
+597:       <div class="legend">
+598:         <span><i style="background:var(--role-source)"></i>Source</span>
+599:         <span><i style="background:var(--role-mule)"></i>Mule</span>
+600:         <span><i style="background:var(--role-chain)"></i>Chain account</span>
+601:         <span><i style="background:var(--role-final)"></i>Final</span>
+602:       </div>
+603:     </div>
+604: 
+605:     <!-- 2. Geo Map & ATM Tracker Section -->
+606:     <div id="modalMapSection" style="display:none;">
+607:       <div class="map-view-wrap">
+608:         <div class="map-canvas-area">
+609:           <div class="map-floating-bar">
+610:             <button class="map-btn" id="mapFitAllBtn">🎯 Center Perimeter</button>
+611:             <button class="map-btn" id="mapFitAtmsBtn">🚨 Focus Primary Target</button>
+612:           </div>
+613:           <div id="modalMap"></div>
+614:         </div>
+615:         <div class="map-atm-sidebar">
+616:           <div class="atm-sidebar-header">
+617:             <div class="atm-sidebar-title">🏧 Predicted Withdrawal ATMs</div>
+618:             <div class="atm-sidebar-sub" id="atmSidebarSub">Ranked candidate kiosks within 1.2km threat perimeter</div>
+619:           </div>
+620:           <div class="atm-list" id="atmList"></div>
+621:         </div>
+622:       </div>
+623:       <div class="legend" style="margin-top:10px;">
+624:         <span><i style="background:#f43f5e;border-radius:50%;"></i>🎯 Suspect Device Anchor</span>
+625:         <span><i style="background:rgba(244,63,94,0.3);border:1px dashed #f43f5e;border-radius:50%;"></i>⭕ 1.2km Threat Geofence</span>
+626:         <span><i style="background:#f43f5e"></i>🚨 Primary ATM (≥90% risk)</span>
+627:         <span><i style="background:#f59e0b"></i>🟠 Secondary ATM</span>
+628:         <span><i style="background:#a78bfa"></i>🟣 Tertiary ATM (outer perimeter)</span>
+629:       </div>
+630:     </div>
+631: 
+632:     <!-- 3. Ledger Section -->
+633:     <div id="modalLedgerSection" style="display:none;">
+634:       <div id="txTableWrap"></div>
+635:     </div>
+636:   </div>
+637: </div>
+638: 
+639: <div class="toast" id="toast"></div>
+640: 
+641: <script>
+642: (function(){
+643:   "use strict";
+644: 
+645:   /* ===================== CONFIG ===================== */
+646:   const CFG_KEY = "chaintrace_backend_url";
+647:   let BASE_URL = localStorage.getItem(CFG_KEY) || "http://localhost:8000";
+648: 
+649:   const cfgBtn = document.getElementById('cfgBtn');
+650:   const cfgPop = document.getElementById('cfgPop');
+651:   const cfgUrl = document.getElementById('cfgUrl');
+652:   cfgUrl.value = BASE_URL;
+653:   cfgBtn.addEventListener('click', () => cfgPop.classList.toggle('open'));
+654:   document.addEventListener('click', (e) => {
+655:     if (!cfgPop.contains(e.target) && e.target !== cfgBtn) cfgPop.classList.remove('open');
+656:   });
+657:   document.getElementById('cfgSave').addEventListener('click', () => {
+658:     const v = cfgUrl.value.trim().replace(/\/+$/, '');
+659:     if (v) { BASE_URL = v; localStorage.setItem(CFG_KEY, v); }
+660:     cfgPop.classList.remove('open');
+661:     refreshHealthAndStats();
+662:     if (drawerOpen) loadScenarios();
+663:   });
+664: 
+665:   /* ===================== FETCH HELPER ===================== */
+666:   function withTimeout(promise, ms){
+667:     return Promise.race([
+668:       promise,
+669:       new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))
+670:     ]);
+671:   }
+672: 
+673:   async function api(path){
+674:     const res = await withTimeout(fetch(BASE_URL + path), 8000);
+675:     if (!res.ok) {
+676:       let detail = res.statusText;
+677:       try { const j = await res.json(); detail = j.detail || detail; } catch(e){}
+678:       throw new Error(detail || ('HTTP ' + res.status));
+679:     }
+680:     return res.json();
+681:   }
+682: 
+683:   function showToast(msg){
+684:     const t = document.getElementById('toast');
+685:     t.textContent = msg;
+686:     t.classList.add('show');
+687:     clearTimeout(showToast._h);
+688:     showToast._h = setTimeout(() => t.classList.remove('show'), 4200);
+689:   }
+690: 
+691:   /* ===================== SCENARIOS DRAWER ===================== */
+692:   const scenarioFab = document.getElementById('scenarioFab');
+693:   const scenarioFabCount = document.getElementById('scenarioFabCount');
+694:   const drawerVeil = document.getElementById('drawerVeil');
+695:   const drawerClose = document.getElementById('drawerClose');
+696:   let drawerOpen = false;
+697: 
+698:   function openDrawer(){
+699:     drawerOpen = true;
+700:     drawerVeil.classList.add('open');
+701:     loadScenarios();
+702:   }
+703:   function closeDrawer(){
+704:     drawerOpen = false;
+705:     drawerVeil.classList.remove('open');
+706:   }
+707:   scenarioFab.addEventListener('click', openDrawer);
+708:   drawerClose.addEventListener('click', closeDrawer);
+709:   drawerVeil.addEventListener('click', e => { if (e.target === drawerVeil) closeDrawer(); });
+710:   document.addEventListener('keydown', e => { if (e.key === 'Escape' && drawerOpen) closeDrawer(); });
+711: 
+712:   /* ===================== HEALTH + STATS (live) ===================== */
+713:   async function refreshHealthAndStats(){
+714:     const dot = document.getElementById('healthDot');
+715:     const label = document.getElementById('healthLabel');
+716:     try {
+717:       const health = await api('/api/health');
+718:       const ok = health.status === 'ok';
+719:       dot.className = 'dot ' + (ok ? 'live' : 'down');
+720:       label.textContent = ok ? 'live · neo4j connected' : 'neo4j disconnected';
+721:     } catch(e){
+722:       dot.className = 'dot down';
+723:       label.textContent = 'backend unreachable';
+724:     }
+725:     try {
+726:       const stats = await api('/api/stats');
+727:       document.getElementById('statScenarios').textContent = stats.scenarios ?? '–';
+728:       document.getElementById('statAccounts').textContent = stats.accounts ?? '–';
+729:       document.getElementById('statTx').textContent = stats.transactions ?? '–';
+730:       scenarioFabCount.textContent = stats.scenarios ?? '–';
+731:     } catch(e){ /* keep last known values */ }
+732:   }
+733:   refreshHealthAndStats();
+734:   setInterval(refreshHealthAndStats, 5000);
+735: 
+736:   /* ===================== GRAPH LAYOUT + RENDER ===================== */
+737:   const CARD_W = 216, CARD_H = 76, GAP_X = 128, GAP_Y = 26, PAD = 30;
+738: 
+739:   const ROLE_COLOR = {
+740:     SOURCE: 'var(--role-source)',
+741:     MULE: 'var(--role-mule)',
+742:     CHAIN_ACCOUNT: 'var(--role-chain)',
+743:     FINAL: 'var(--role-final)',
+744:     FOCUS: 'var(--role-focus)',
+745:     PEER: 'var(--role-peer)'
+746:   };
+747:   const ROLE_LABEL = {
+748:     SOURCE: 'Source', MULE: 'Mule', CHAIN_ACCOUNT: 'Chain', FINAL: 'Final',
+749:     FOCUS: 'Searched', PEER: 'Account'
+750:   };
+751: 
+752:   // accounts: [{account_id, role}]  edges: [{source_account, destination_account, amount, mode, transaction_id, timestamp}]
+753:   function layoutGraph(accounts, edges){
+754:     const ids = accounts.map(a => a.account_id);
+755:     const hasIncoming = new Set(edges.map(e => e.destination_account));
+756:     let roots = ids.filter(id => !hasIncoming.has(id));
+757:     if (roots.length === 0 && ids.length) roots = [ids[0]];
+758: 
+759:     const outAdj = new Map();
+760:     edges.forEach(e => {
+761:       if (!outAdj.has(e.source_account)) outAdj.set(e.source_account, []);
+762:       outAdj.get(e.source_account).push(e);
+763:     });
+764: 
+765:     // Cap how far a level can grow: the longest possible simple path
+766:     // through the graph has at most ids.length - 1 hops. Anything trying
+767:     // to exceed that can only be a cycle (e.g. a counterparty that both
+768:     // sends to and receives from the focus account) — refuse to keep
+769:     // pushing its level outward so we terminate quickly instead of
+770:     // ping-ponging toward runaway coordinates.
+771:     const maxAllowedLevel = Math.max(0, ids.length - 1);
+772:     const level = new Map();
+773:     roots.forEach(r => level.set(r, 0));
+774:     const queue = [...roots];
+775:     let guard = 0;
+776:     const guardLimit = Math.max(1000, ids.length * ids.length * 4);
+777:     while (queue.length && guard < guardLimit) {
+778:       guard++;
+779:       const cur = queue.shift();
+780:       const curLevel = level.get(cur) ?? 0;
+781:       (outAdj.get(cur) || []).forEach(e => {
+782:         const dst = e.destination_account;
+783:         const nl = curLevel + 1;
+784:         if (nl > maxAllowedLevel) return;
+785:         if (!level.has(dst) || level.get(dst) < nl) {
+786:           level.set(dst, nl);
+787:           queue.push(dst);
+788:         }
+789:       });
+790:     }
+791:     ids.forEach(id => { if (!level.has(id)) level.set(id, 0); });
+792: 
+793:     const byLevel = new Map();
+794:     ids.forEach(id => {
+795:       const l = level.get(id);
+796:       if (!byLevel.has(l)) byLevel.set(l, []);
+797:       byLevel.get(l).push(id);
+798:     });
+799: 
+800:     const maxLevel = ids.length ? Math.max(...byLevel.keys()) : 0;
+The above content does NOT show the entire file contents. If you need to view any lines of the file which were not shown to complete your task, call this tool again to view those lines.

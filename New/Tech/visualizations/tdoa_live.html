@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>TDoA Verification — Live</title>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/3.6.2/maplibre-gl.css" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/3.6.2/maplibre-gl.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/turf/6.5.0/turf.min.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #05070d; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #e8edf5; }
+  #app { display: flex; flex-direction: column; height: 100vh; }
+  header { padding: 10px 12px 6px; background: #0a0f1e; border-bottom: 1px solid #1c2440; }
+  header h1 { font-size: 14px; margin: 0 0 2px; font-weight: 700; }
+  header p { font-size: 11px; margin: 0; color: #8fa0c9; }
+  #server-url { width: 100%; margin-top: 6px; padding: 6px 8px; border-radius: 6px; border: 1px solid #2b3a63; background: #131c3a; color: #cdd8f5; font-size: 12px; }
+  #map { flex: 1; position: relative; }
+  #phase-badge { position: absolute; top: 10px; left: 10px; background: rgba(10,15,30,0.85); border: 1px solid #2b3a63; border-radius: 20px; padding: 6px 12px; font-size: 11px; font-weight: 700; z-index: 5; }
+  #phase-badge.red { color: #ff6b6b; border-color: #ff6b6b; }
+  #phase-badge.green { color: #4ade80; border-color: #4ade80; }
+  #phase-badge.gray { color: #8fa0c9; }
+  #controls { display: flex; gap: 6px; padding: 8px 12px; background: #0a0f1e; }
+  .btn { flex: 1; padding: 9px 10px; border-radius: 8px; border: 1px solid #2b3a63; background: #131c3a; color: #cdd8f5; font-size: 12px; font-weight: 700; text-align: center; }
+  .btn:active { transform: scale(0.97); }
+  #readout { padding: 10px 12px 14px; background: #0a0f1e; border-top: 1px solid #1c2440; font-size: 12px; line-height: 1.5; min-height: 70px; }
+  .ok { color: #4ade80; } .bad { color: #ff6b6b; } .dim { color: #8fa0c9; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>Transaction Verification — Live</h1>
+    <p>Fetches a real solve from your running api.py</p>
+    <input id="server-url" value="http://localhost:8000/v1/demo/indore?sigma_ms=0.03"/>
+  </header>
+  <div id="map"><div id="phase-badge" class="gray">IDLE</div></div>
+  <div id="controls">
+    <div class="btn" id="btn-fetch">↻ Fetch + Play</div>
+  </div>
+  <div id="readout">Make sure api.py is running (python api.py), then tap Fetch + Play. Edit the URL above to point at /v1/verify with your own POST body if you're testing that endpoint instead (use curl for POST — this box does GET).</div>
+</div>
+
+<script>
+const style = {
+  version: 8,
+  sources: {
+    streets: {
+      type: 'raster',
+      tiles: [
+        'https://mt0.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
+        'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
+        'https://mt2.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
+        'https://mt3.google.com/vt/lyrs=m&x={x}&y={y}&z={z}'
+      ],
+      tileSize: 256,
+      maxzoom: 20,
+      attribution: '&copy; Google Maps'
+    }
+  },
+  layers: [{ id: 'streets', type: 'raster', source: 'streets' }]
+};
+const map = new maplibregl.Map({ container: 'map', style, center: [78.9629, 22.5937], zoom: 3.4, attributionControl: false });
+const badge = document.getElementById('phase-badge');
+const readout = document.getElementById('readout');
+function setBadge(text, cls) { badge.textContent = text; badge.className = cls || 'gray'; }
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+const KM_PER_DEG_LAT = 111.0;
+// Rebuild an ellipse polygon from semi_major/semi_minor/angle_deg (km) around
+// a center point -- same flat-earth approximation tdoa_solver.py uses, done
+// in JS because the API response only sends the ellipse's numbers, not points.
+function ellipsePolygon(centerLat, centerLon, semiMajorKm, semiMinorKm, angleDeg, n = 64) {
+  const latRad = centerLat * Math.PI / 180;
+  const kmPerDegLon = KM_PER_DEG_LAT * Math.cos(latRad);
+  const ang = angleDeg * Math.PI / 180;
+  const ring = [];
+  for (let i = 0; i <= n; i++) {
+    const t = (i / n) * 2 * Math.PI;
+    const ex = semiMajorKm * Math.cos(t), ey = semiMinorKm * Math.sin(t);
+    const rx = ex * Math.cos(ang) - ey * Math.sin(ang);
+    const ry = ex * Math.sin(ang) + ey * Math.cos(ang);
+    ring.push([centerLon + rx / kmPerDegLon, centerLat + ry / KM_PER_DEG_LAT]);
+  }
+  return { type: 'Polygon', coordinates: [ring] };
+}
+function circlePolygon(centerLat, centerLon, radiusKm, n = 64) {
+  return ellipsePolygon(centerLat, centerLon, radiusKm, radiusKm, 0, n);
+}
+
+let layersReady = false;
+map.on('load', () => {
+  map.addSource('ellipse', { type: 'geojson', data: { type: 'Polygon', coordinates: [[]] } });
+  map.addLayer({ id: 'ellipse-fill', type: 'fill', source: 'ellipse', paint: { 'fill-color': '#ff5c5c', 'fill-opacity': 0 } });
+  map.addLayer({ id: 'ellipse-line', type: 'line', source: 'ellipse', paint: { 'line-color': '#ff5c5c', 'line-width': 2, 'line-opacity': 0 } });
+  map.addSource('circles', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addLayer({ id: 'circles-line', type: 'line', source: 'circles', paint: { 'line-color': '#5cd0ff', 'line-width': 1.5, 'line-dasharray': [2, 2], 'line-opacity': 0 } });
+  map.addSource('sector', { type: 'geojson', data: { type: 'Polygon', coordinates: [[]] } });
+  map.addLayer({ id: 'sector-fill', type: 'fill', source: 'sector', paint: { 'fill-color': '#4ade80', 'fill-opacity': 0 } });
+  map.addLayer({ id: 'sector-line', type: 'line', source: 'sector', paint: { 'line-color': '#4ade80', 'line-width': 2, 'line-opacity': 0 } });
+  map.addSource('nodes', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addLayer({ id: 'nodes-pt', type: 'circle', source: 'nodes', paint: { 'circle-radius': 5, 'circle-color': '#3a5cff', 'circle-stroke-color': '#fff', 'circle-stroke-width': 1, 'circle-opacity': 0 } });
+  map.addSource('est', { type: 'geojson', data: { type: 'Point', coordinates: [0, 0] } });
+  map.addLayer({ id: 'est-pt', type: 'circle', source: 'est', paint: { 'circle-radius': 7, 'circle-color': '#f59e0b', 'circle-stroke-color': '#fff', 'circle-stroke-width': 2, 'circle-opacity': 0 } });
+  layersReady = true;
+});
+
+function fadeLayer(layerId, prop, from, to, durationMs) {
+  return new Promise(resolve => {
+    const start = performance.now();
+    function step(now) {
+      const t = Math.min((now - start) / durationMs, 1);
+      map.setPaintProperty(layerId, prop, from + (to - from) * t);
+      if (t < 1) requestAnimationFrame(step); else resolve();
+    }
+    requestAnimationFrame(step);
+  });
+}
+
+async function fetchAndPlay() {
+  const url = document.getElementById('server-url').value.trim();
+  setBadge('FETCHING…', 'gray');
+  readout.innerHTML = `<span class="dim">GET ${url}</span>`;
+  let data;
+  try {
+    const res = await fetch(url);
+    data = await res.json();
+  } catch (err) {
+    setBadge('CONNECTION FAILED', 'red');
+    readout.innerHTML = `<span class="bad">Couldn't reach the server.</span> Is <code>python api.py</code> running? Is the URL/port right? Browser console has the exact error.<br><span class="dim">${err}</span>`;
+    return;
+  }
+  if (data.error) {
+    setBadge('SERVER ERROR', 'red');
+    readout.innerHTML = `<span class="bad">${data.error}</span>`;
+    return;
+  }
+  if (!data.converged) {
+    setBadge('DID NOT CONVERGE', 'red');
+    readout.innerHTML = `<span class="bad">✗ ${data.warning || 'Solve failed to converge.'}</span><br>`
+      + `<span class="dim">Raw solve: ${data.estimated_lat?.toFixed(4)}, ${data.estimated_lon?.toFixed(4)} — not shown on map, per your own README this should be treated as no-result.</span>`;
+    return;
+  }
+
+  await playSequence(data);
+}
+
+async function playSequence(data) {
+  ['ellipse-fill','sector-fill'].forEach(id => map.setPaintProperty(id, 'fill-opacity', 0));
+  ['ellipse-line','circles-line','sector-line'].forEach(id => map.setPaintProperty(id, 'line-opacity', 0));
+  ['nodes-pt','est-pt'].forEach(id => map.setPaintProperty(id, 'circle-opacity', 0));
+  map.jumpTo({ center: [78.9629, 22.5937], zoom: 3.4, pitch: 0, bearing: 0 });
+
+  const ell = data.error_ellipse_km;
+  const ellipseGeo = ellipsePolygon(data.estimated_lat, data.estimated_lon, ell.semi_major, ell.semi_minor, ell.angle_deg);
+  map.getSource('ellipse').setData(ellipseGeo);
+  const circleFeatures = (data.nodes || []).map((n, i) => ({
+    type: 'Feature', geometry: circlePolygon(n.lat, n.lon, Math.max(data.isochrone_radii_km?.[i] ?? 0, 0.01))
+  }));
+  map.getSource('circles').setData({ type: 'FeatureCollection', features: circleFeatures });
+  map.getSource('nodes').setData({ type: 'FeatureCollection', features: (data.nodes || []).map(n => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [n.lon, n.lat] }, properties: { name: n.name } })) });
+  map.getSource('est').setData({ type: 'Point', coordinates: [data.estimated_lon, data.estimated_lat] });
+  const sectorGeo = data.verified_sector_geojson;
+  if (sectorGeo) map.getSource('sector').setData(sectorGeo);
+
+  setBadge('SIGNAL RECEIVED', 'gray');
+  readout.innerHTML = `<span class="dim">Transaction ${data.transaction_id || '(unnamed)'} — ${data.nodes?.length || 0} node timestamps received.</span>`;
+  await sleep(300);
+
+  const tooLarge = ell.semi_major > 1000;
+  setBadge('CAMERA FLY-TO', 'gray');
+  map.flyTo({ center: [data.estimated_lon, data.estimated_lat], zoom: tooLarge ? 5 : 10.2, pitch: tooLarge ? 0 : 55, bearing: -18, speed: 0.9, curve: 1.4, essential: true });
+  await sleep(900);
+  map.setPaintProperty('nodes-pt', 'circle-opacity', 1);
+  map.setPaintProperty('est-pt', 'circle-opacity', 1);
+
+  setBadge('DRAWING ERROR ELLIPSE', 'red');
+  readout.innerHTML = `<span class="bad">Raw ellipse:</span> ${ell.semi_major.toFixed(1)} km × ${ell.semi_minor.toFixed(1)} km`;
+  await Promise.all([fadeLayer('ellipse-fill', 'fill-opacity', 0, 0.35, 700), fadeLayer('ellipse-line', 'line-opacity', 0, 0.9, 700)]);
+
+  if (tooLarge || !sectorGeo) {
+    setBadge('UNVERIFIABLE', 'red');
+    readout.innerHTML = `<span class="bad">✗ ${data.warning || 'Ellipse too large / empty intersection — not a usable fix.'}</span><br>`
+      + `<span class="dim">Estimated: ${data.estimated_lat.toFixed(4)}, ${data.estimated_lon.toFixed(4)}</span>`;
+    return;
+  }
+
+  setBadge('INTERSECTING ISOCHRONES', 'red');
+  await fadeLayer('circles-line', 'line-opacity', 0, 0.8, 500);
+  await sleep(500);
+
+  setBadge('VERIFIED', 'green');
+  await Promise.all([
+    fadeLayer('ellipse-fill', 'fill-opacity', 0.35, 0, 500), fadeLayer('ellipse-line', 'line-opacity', 0.9, 0, 500),
+    fadeLayer('circles-line', 'line-opacity', 0.8, 0, 500),
+    fadeLayer('sector-fill', 'fill-opacity', 0, 0.5, 600), fadeLayer('sector-line', 'line-opacity', 0, 1, 600)
+  ]);
+  const areaTxt = data.verified_sector_km2 < 1 ? (data.verified_sector_km2 * 1e6).toFixed(0) + ' m²' : data.verified_sector_km2.toFixed(2) + ' km²';
+  readout.innerHTML = `<span class="ok">✓ Verified sector locked in</span> — ${areaTxt}<br>`
+    + `Estimated: ${data.estimated_lat.toFixed(4)}, ${data.estimated_lon.toFixed(4)}${data.true_lat ? ` &nbsp;|&nbsp; true: ${data.true_lat.toFixed(4)}, ${data.true_lon.toFixed(4)}` : ''}`;
+}
+
+document.getElementById('btn-fetch').onclick = fetchAndPlay;
+</script>
+</body>
+</html>

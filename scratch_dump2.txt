@@ -1,0 +1,70 @@
+684:     const t = document.getElementById('toast');
+685:     t.textContent = msg;
+686:     t.classList.add('show');
+687:     clearTimeout(showToast._h);
+688:     showToast._h = setTimeout(() => t.classList.remove('show'), 4200);
+689:   }
+690: 
+691:   /* ===================== SCENARIOS DRAWER ===================== */
+692:   const scenarioFab = document.getElementById('scenarioFab');
+693:   const scenarioFabCount = document.getElementById('scenarioFabCount');
+694:   const drawerVeil = document.getElementById('drawerVeil');
+695:   const drawerClose = document.getElementById('drawerClose');
+696:   let drawerOpen = false;
+697: 
+698:   function openDrawer(){
+699:     drawerOpen = true;
+700:     drawerVeil.classList.add('open');
+701:     loadScenarios();
+702:   }
+703:   function closeDrawer(){
+704:     drawerOpen = false;
+705:     drawerVeil.classList.remove('open');
+706:   }
+707:   scenarioFab.addEventListener('click', openDrawer);
+708:   drawerClose.addEventListener('click', closeDrawer);
+709:   drawerVeil.addEventListener('click', e => { if (e.target === drawerVeil) closeDrawer(); });
+710:   document.addEventListener('keydown', e => { if (e.key === 'Escape' && drawerOpen) closeDrawer(); });
+711: 
+712:   /* ===================== HEALTH + STATS (live) ===================== */
+713:   async function refreshHealthAndStats(){
+714:     const dot = document.getElementById('healthDot');
+715:     const label = document.getElementById('healthLabel');
+716:     try {
+717:       const health = await api('/api/health');
+718:       const ok = health.status === 'ok';
+719:       dot.className = 'dot ' + (ok ? 'live' : 'down');
+720:       label.textContent = ok ? 'live · neo4j connected' : 'neo4j disconnected';
+721:     } catch(e){
+722:       dot.className = 'dot down';
+723:       label.textContent = 'backend unreachable';
+724:     }
+725:     try {
+726:       const stats = await api('/api/stats');
+727:       document.getElementById('statScenarios').textContent = stats.scenarios ?? '–';
+728:       document.getElementById('statAccounts').textContent = stats.accounts ?? '–';
+729:       document.getElementById('statTx').textContent = stats.transactions ?? '–';
+730:       scenarioFabCount.textContent = stats.scenarios ?? '–';
+731:     } catch(e){ /* keep last known values */ }
+732:   }
+733:   refreshHealthAndStats();
+734:   setInterval(refreshHealthAndStats, 5000);
+735: 
+736:   /* ===================== GRAPH LAYOUT + RENDER ===================== */
+737:   const CARD_W = 216, CARD_H = 76, GAP_X = 128, GAP_Y = 26, PAD = 30;
+738: 
+739:   const ROLE_COLOR = {
+740:     SOURCE: 'var(--role-source)',
+741:     MULE: 'var(--role-mule)',
+742:     CHAIN_ACCOUNT: 'var(--role-chain)',
+743:     FINAL: 'var(--role-final)',
+744:     FOCUS: 'var(--role-focus)',
+745:     PEER: 'var(--role-peer)'
+746:   };
+747:   const ROLE_LABEL = {
+748:     SOURCE: 'Source', MULE: 'Mule', CHAIN_ACCOUNT: 'Chain', FINAL: 'Final',
+749:     FOCUS: 'Searched', PEER: 'Account'
+750:   };
+751: 
+752:   // accounts: [{account_id, role}]  edges: [{source_account, destination_account, amount, mode, transaction_id, timestamp}]
+753:   function layoutGraph(accounts, edges){

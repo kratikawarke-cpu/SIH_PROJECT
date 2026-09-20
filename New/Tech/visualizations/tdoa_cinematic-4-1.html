@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Location Verification</title>
+<link href="https://cdn.jsdelivr.net/npm/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #0a0e1a; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #eef1f8; }
+  #app { display: flex; flex-direction: column; height: 100vh; }
+  header { padding: 14px 16px 10px; background: #0d1220; border-bottom: 1px solid #1c2440; }
+  header h1 { font-size: 15px; margin: 0 0 2px; font-weight: 700; letter-spacing: .2px; }
+  header p { font-size: 11.5px; margin: 0; color: #8fa0c9; }
+  #map { flex: 1; position: relative; }
+  #phase-badge { position: absolute; top: 12px; left: 12px; background: rgba(13,18,32,0.9); backdrop-filter: blur(4px); border: 1px solid #2b3a63; border-radius: 20px; padding: 7px 14px; font-size: 11px; font-weight: 700; letter-spacing: .3px; z-index: 5; transition: background .3s, color .3s, border-color .3s; box-shadow: 0 4px 14px rgba(0,0,0,0.35); }
+  #phase-badge.red { color: #ff6b6b; border-color: #ff6b6b; }
+  #phase-badge.green { color: #4ade80; border-color: #4ade80; }
+  #legend { position: absolute; top: 12px; right: 12px; background: rgba(13,18,32,0.9); backdrop-filter: blur(4px); border: 1px solid #1c2440; border-radius: 10px; padding: 9px 12px; font-size: 10.5px; z-index: 5; box-shadow: 0 4px 14px rgba(0,0,0,0.35); }
+  #legend div { display: flex; align-items: center; gap: 6px; margin: 3px 0; color: #cdd8f5; }
+  #legend .dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+  #controls { display: flex; gap: 8px; padding: 10px 14px; background: #0d1220; }
+  .btn { flex: 1; padding: 11px 10px; border-radius: 10px; border: 1px solid #2b3a63; background: linear-gradient(#182449, #131c3a); color: #e4eaff; font-size: 13px; font-weight: 700; text-align: center; cursor: pointer; user-select: none; transition: transform .1s, background .2s; }
+  .btn:active { transform: scale(0.97); background: #1c2a52; }
+  #readout { padding: 12px 16px 16px; background: #0d1220; border-top: 1px solid #1c2440; font-size: 12.5px; line-height: 1.6; min-height: 74px; }
+  .ok { color: #4ade80; font-weight: 700; } .bad { color: #ff6b6b; } .dim { color: #8fa0c9; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>Transaction Location Verification</h1>
+    <p>Confirming where a transaction actually originated, using timing data from 4 nearby network nodes</p>
+  </header>
+  <div id="map">
+    <div id="phase-badge">READY</div>
+    <div id="legend">
+      <div><span class="dot" style="background:#ff5c5c"></span>Initial estimate range</div>
+      <div><span class="dot" style="background:#5cd0ff"></span>Node distance limits</div>
+      <div><span class="dot" style="background:#4ade80"></span>Verified area</div>
+    </div>
+  </div>
+  <div id="controls">
+    <div class="btn" id="btn-play">Loading map...</div>
+  </div>
+  <div id="readout">Tap play to run the verification.</div>
+</div>
+
+<script>
+// Real solver output -- these numbers come directly from tdoa_solver.py, unmodified.
+const PAYLOAD = {"nodes": [{"name": "Rajwada-DC", "lat": 22.7196, "lon": 75.8577, "arrival_ms": 0.6282372158967322}, {"name": "VijayNagar-DC", "lat": 22.753, "lon": 75.893, "arrival_ms": 0.6470149273581552}, {"name": "Bhawarkuan-DC", "lat": 22.685, "lon": 75.899, "arrival_ms": 0.656741502606937}, {"name": "MR10-DC", "lat": 22.695, "lon": 75.82, "arrival_ms": 0.6427723582658421}], "true": {"lat": 22.73, "lon": 75.87}, "estimated": {"lat": 22.730309928650918, "lon": 75.84495000060242}, "semi_major_km": 19.97429198800236, "semi_minor_km": 10.706003568159336, "isochrone_radii_km": [1.7713738825959169, 5.526916174880525, 7.472231224636872, 4.678402356417899], "verified_sector_area_km2": 0.5722312171064047, "ellipse_geo": {"type": "Polygon", "coordinates": [[[75.72252176458522, 22.870412157434313], [75.7129429896945, 22.86131301245228], [75.70562289135968, 22.849972368385483], [75.70068671849276, 22.836584266798138], [75.6982189303801, 22.821377781820274], [75.69826175156047, 22.804613100625907], [75.7008144493516, 22.78657707155832], [75.70583334638657, 22.76757829607538], [75.7132325679456, 22.74794184849307], [75.72288551129634, 22.72800371387377], [75.7346270119018, 22.70810503922871], [75.74825616943122, 22.688586296398018], [75.76353978522059, 22.669781456483154], [75.78021635236631, 22.65201227550874], [75.79800053018091, 22.6355827890878], [75.81658802645127, 22.62077411028811], [75.83566080396278, 22.607839619709676], [75.85489252220425, 22.597000630072408], [75.87395412114454, 22.58844259949414], [75.89251945154088, 22.582311958250802], [75.91027085544292, 22.578713603313794], [75.92690460140827, 22.57770910353375], [75.94213608143173, 22.5793156461804], [75.95570468066713, 22.583505742863647], [75.96737823661962, 22.590207699867523], [75.97695701151034, 22.599306844849558], [75.98427710984517, 22.610647488916353], [75.98921328271207, 22.624035590503702], [75.99168107082475, 22.63924207548156], [75.99163824964438, 22.65600675667593], [75.98908555185324, 22.67404278574352], [75.98406665481828, 22.693041561226455], [75.97666743325925, 22.712678008808766], [75.9670144899085, 22.732616143428068], [75.95527298930304, 22.75251481807313], [75.94164383177362, 22.772033560903818], [75.92636021598426, 22.790838400818686], [75.90968364883854, 22.808607581793098], [75.89189947102393, 22.825037068214037], [75.87331197475356, 22.839845747013726], [75.85423919724205, 22.85278023759216], [75.83500747900058, 22.863619227229428], [75.81594588006031, 22.872177257807696], [75.79738054966397, 22.878307899051038], [75.77962914576193, 22.881906253988042], [75.76299539979657, 22.882910753768087], [75.7477639197731, 22.881304211121435], [75.73419532053771, 22.87711411443819], [75.72252176458522, 22.870412157434313]]]}, "isochrone_circles_geo": [{"type": "Polygon", "coordinates": [[[75.87500075787544, 22.7196], [75.87485274749348, 22.72168297917021], [75.87441124884626, 22.723730317989308], [75.87368381609805, 22.725706985922464], [75.87268289582485, 22.727579161633315], [75.87142561405004, 22.729314811676378], [75.86993348321339, 22.7308842385982], [75.86823203408719, 22.73226058906903], [75.86635037893771, 22.733420313350706], [75.86432071340629, 22.734343568239236], [75.86217776563286, 22.735014556587508], [75.85995820204799, 22.735421797598843], [75.8577, 22.73555832326663], [75.855441797952, 22.735421797598843], [75.85322223436712, 22.735014556587508], [75.8510792865937, 22.734343568239236], [75.84904962106228, 22.733420313350706], [75.8471679659128, 22.73226058906903], [75.8454665167866, 22.7308842385982], [75.84397438594995, 22.729314811676378], [75.84271710417514, 22.727579161633315], [75.84171618390194, 22.725706985922464], [75.84098875115373, 22.723730317989308], [75.84054725250651, 22.72168297917021], [75.84039924212455, 22.7196], [75.84054725250651, 22.71751702082979], [75.84098875115373, 22.715469682010692], [75.84171618390194, 22.713493014077535], [75.84271710417514, 22.711620838366684], [75.84397438594995, 22.70988518832362], [75.8454665167866, 22.7083157614018], [75.8471679659128, 22.70693941093097], [75.84904962106228, 22.705779686649294], [75.8510792865937, 22.704856431760764], [75.85322223436712, 22.70418544341249], [75.855441797952, 22.703778202401157], [75.8577, 22.70364167673337], [75.85995820204799, 22.703778202401157], [75.86217776563286, 22.70418544341249], [75.86432071340629, 22.704856431760764], [75.86635037893771, 22.705779686649294], [75.86823203408719, 22.70693941093097], [75.86993348321339, 22.7083157614018], [75.87142561405004, 22.70988518832362], [75.87268289582485, 22.711620838366684], [75.87368381609805, 22.713493014077535], [75.87441124884626, 22.715469682010692], [75.87485274749348, 22.71751702082979], [75.87500075787544, 22.7196]]]}, {"type": "Polygon", "coordinates": [[[75.94698060763962, 22.753], [75.94651879605813, 22.759499165072313], [75.94514126303788, 22.765887127628325], [75.94287157855076, 22.772054587857635], [75.93974857752762, 22.77789601880577], [75.93582569538184, 22.783311471969654], [75.93117005371454, 22.788208287444213], [75.92586131184545, 22.792502679359018], [75.9199903038198, 22.796121169477782], [75.91365748421268, 22.79900184443133], [75.90697120932334, 22.80109541507254], [75.90004588316893, 22.80236605982729], [75.893, 22.802792037611535], [75.88595411683107, 22.80236605982729], [75.87902879067666, 22.80109541507254], [75.87234251578732, 22.79900184443133], [75.8660096961802, 22.796121169477782], [75.86013868815455, 22.792502679359018], [75.85482994628546, 22.788208287444213], [75.85017430461816, 22.783311471969654], [75.84625142247238, 22.77789601880577], [75.84312842144924, 22.772054587857635], [75.84085873696212, 22.765887127628325], [75.83948120394187, 22.759499165072313], [75.83901939236038, 22.753], [75.83948120394187, 22.746500834927687], [75.84085873696212, 22.740112872371675], [75.84312842144924, 22.733945412142365], [75.84625142247238, 22.72810398119423], [75.85017430461816, 22.722688528030346], [75.85482994628546, 22.717791712555787], [75.86013868815455, 22.713497320640982], [75.8660096961802, 22.709878830522218], [75.87234251578732, 22.70699815556867], [75.87902879067666, 22.704904584927462], [75.88595411683107, 22.70363394017271], [75.893, 22.703207962388465], [75.90004588316893, 22.70363394017271], [75.90697120932334, 22.704904584927462], [75.91365748421268, 22.70699815556867], [75.9199903038198, 22.709878830522218], [75.92586131184545, 22.713497320640982], [75.93117005371454, 22.717791712555787], [75.93582569538184, 22.722688528030346], [75.93974857752762, 22.72810398119423], [75.94287157855076, 22.733945412142365], [75.94514126303788, 22.740112872371675], [75.94651879605813, 22.746500834927687], [75.94698060763962, 22.753]]]}, {"type": "Polygon", "coordinates": [[[75.97198022426372, 22.685], [75.97135586832817, 22.693786683685943], [75.9694934834247, 22.70242302477789], [75.96642493547533, 22.710761253085312], [75.96220272818627, 22.718658699210074], [75.95689910469483, 22.7259802356594], [75.95060481146939, 22.732600588914725], [75.94342754561217, 22.73840648289634], [75.93549011213186, 22.74329857714853], [75.92692832271601, 22.747193166582285], [75.91788867195531, 22.750023613692615], [75.9085258307805, 22.751741488744713], [75.899, 22.75231739842015], [75.8894741692195, 22.751741488744713], [75.88011132804469, 22.750023613692615], [75.871071677284, 22.747193166582285], [75.86250988786814, 22.74329857714853], [75.85457245438784, 22.73840648289634], [75.84739518853061, 22.732600588914725], [75.84110089530517, 22.7259802356594], [75.83579727181373, 22.718658699210074], [75.83157506452467, 22.710761253085312], [75.8285065165753, 22.70242302477789], [75.82664413167183, 22.693786683685943], [75.82601977573628, 22.685], [75.82664413167183, 22.676213316314055], [75.8285065165753, 22.667576975222108], [75.83157506452467, 22.659238746914685], [75.83579727181373, 22.651341300789923], [75.84110089530517, 22.644019764340598], [75.84739518853061, 22.637399411085273], [75.85457245438784, 22.631593517103656], [75.86250988786814, 22.62670142285147], [75.871071677284, 22.622806833417712], [75.88011132804469, 22.619976386307382], [75.8894741692195, 22.618258511255284], [75.899, 22.617682601579848], [75.9085258307805, 22.618258511255284], [75.91788867195531, 22.619976386307382], [75.92692832271601, 22.622806833417712], [75.93549011213186, 22.62670142285147], [75.94342754561217, 22.631593517103656], [75.95060481146939, 22.637399411085273], [75.95689910469483, 22.644019764340598], [75.96220272818627, 22.651341300789923], [75.96642493547533, 22.659238746914685], [75.9694934834247, 22.667576975222108], [75.97135586832817, 22.676213316314055], [75.97198022426372, 22.685]]]}, {"type": "Polygon", "coordinates": [[[75.8656932933287, 22.695], [75.86530238086999, 22.700501387795104], [75.8641363321144, 22.705908645319763], [75.86221509847942, 22.711129252898548], [75.85957155280524, 22.71607388448837], [75.85625092689124, 22.72065793607181], [75.85231003756748, 22.724802973255336], [75.8478163145429, 22.72843807330352], [75.84284664666436, 22.731501038646694], [75.83748606632709, 22.733939461098622], [75.83182629454691, 22.735711618575095], [75.82596417158818, 22.736787188970357], [75.82, 22.737147768976737], [75.8140358284118, 22.736787188970357], [75.80817370545307, 22.735711618575095], [75.8025139336729, 22.733939461098622], [75.79715335333563, 22.731501038646694], [75.79218368545709, 22.72843807330352], [75.78768996243251, 22.724802973255336], [75.78374907310875, 22.72065793607181], [75.78042844719475, 22.71607388448837], [75.77778490152056, 22.711129252898548], [75.77586366788559, 22.705908645319763], [75.77469761913, 22.700501387795104], [75.77430670667128, 22.695], [75.77469761913, 22.689498612204897], [75.77586366788559, 22.684091354680238], [75.77778490152056, 22.678870747101453], [75.78042844719475, 22.67392611551163], [75.78374907310875, 22.66934206392819], [75.78768996243251, 22.665197026744664], [75.79218368545709, 22.661561926696482], [75.79715335333563, 22.658498961353306], [75.8025139336729, 22.65606053890138], [75.80817370545307, 22.654288381424905], [75.8140358284118, 22.653212811029643], [75.82, 22.652852231023264], [75.82596417158818, 22.653212811029643], [75.83182629454691, 22.654288381424905], [75.83748606632709, 22.65606053890138], [75.84284664666436, 22.658498961353306], [75.8478163145429, 22.661561926696482], [75.85231003756748, 22.665197026744664], [75.85625092689124, 22.66934206392819], [75.85957155280524, 22.67392611551163], [75.86221509847942, 22.678870747101453], [75.8641363321144, 22.684091354680238], [75.86530238086999, 22.689498612204897], [75.8656932933287, 22.695]]]}], "verified_sector_geo": {"type": "Polygon", "coordinates": [[[75.86029788702469, 22.71486832076013], [75.85799258488885, 22.718416045831663], [75.85532139339166, 22.721738261581322], [75.85231003756748, 22.724802973255336], [75.84898751841905, 22.727580666004936], [75.84538583362206, 22.730044589130507], [75.8450604504003, 22.730224483392337], [75.84504460221183, 22.73020835440225], [75.84539335426018, 22.729528195950003], [75.84811676509403, 22.725337026061638], [75.85127242601571, 22.72141226573442], [75.85482994628546, 22.717791712555787], [75.85875506503837, 22.71451023443205], [75.86141428190173, 22.71269105638209], [75.86029788702469, 22.71486832076013]]]}};
+
+const style = {
+  version: 8,
+  sources: {
+    osm: {
+      type: 'raster',
+      tiles: [
+        'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png'
+      ],
+      tileSize: 256,
+      maxzoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    }
+  },
+  layers: [{ id: 'osm', type: 'raster', source: 'osm' }]
+};
+
+const map = new maplibregl.Map({
+  container: 'map', style, center: [78.9629, 22.5937], zoom: 3.4, pitch: 0, bearing: 0, attributionControl: false,
+  dragRotate: false, pitchWithRotate: false, touchPitch: false
+});
+map.addControl(new maplibregl.AttributionControl({ compact: true }));
+
+const badge = document.getElementById('phase-badge');
+const readout = document.getElementById('readout');
+function setBadge(text, cls) { badge.textContent = text; badge.className = cls || ''; }
+
+let mapReady = false;
+
+map.on('load', () => {
+  map.addSource('ellipse', { type: 'geojson', data: PAYLOAD.ellipse_geo });
+  map.addLayer({ id: 'ellipse-fill', type: 'fill', source: 'ellipse', paint: { 'fill-color': '#ff5c5c', 'fill-opacity': 0 } });
+  map.addLayer({ id: 'ellipse-line', type: 'line', source: 'ellipse', paint: { 'line-color': '#ff5c5c', 'line-width': 2, 'line-opacity': 0 } });
+
+  map.addSource('circles', { type: 'geojson', data: { type: 'FeatureCollection', features: PAYLOAD.isochrone_circles_geo.map(g => ({ type: 'Feature', geometry: g })) } });
+  map.addLayer({ id: 'circles-line', type: 'line', source: 'circles', paint: { 'line-color': '#5cd0ff', 'line-width': 1.5, 'line-dasharray': [2, 2], 'line-opacity': 0 } });
+
+  map.addSource('sector', { type: 'geojson', data: PAYLOAD.verified_sector_geo });
+  map.addLayer({ id: 'sector-fill', type: 'fill', source: 'sector', paint: { 'fill-color': '#4ade80', 'fill-opacity': 0 } });
+  map.addLayer({ id: 'sector-line', type: 'line', source: 'sector', paint: { 'line-color': '#4ade80', 'line-width': 2.5, 'line-opacity': 0 } });
+
+  const nodesFC = { type: 'FeatureCollection', features: PAYLOAD.nodes.map(n => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [n.lon, n.lat] }, properties: { name: n.name } })) };
+  map.addSource('nodes', { type: 'geojson', data: nodesFC });
+  map.addLayer({ id: 'nodes-pt', type: 'circle', source: 'nodes', paint: { 'circle-radius': 6, 'circle-color': '#3a5cff', 'circle-stroke-color': '#fff', 'circle-stroke-width': 1.5, 'circle-opacity': 0, 'circle-stroke-opacity': 0 } });
+
+  map.addSource('est', { type: 'geojson', data: { type: 'Feature', geometry: { type: 'Point', coordinates: [PAYLOAD.estimated.lon, PAYLOAD.estimated.lat] } } });
+  map.addLayer({ id: 'est-pt', type: 'circle', source: 'est', paint: { 'circle-radius': 8, 'circle-color': '#f59e0b', 'circle-stroke-color': '#fff', 'circle-stroke-width': 2, 'circle-opacity': 0, 'circle-stroke-opacity': 0 } });
+
+  mapReady = true;
+  const btn = document.getElementById('btn-play');
+  btn.textContent = 'Play sequence';
+  readout.textContent = 'Tap play to run the verification.';
+});
+
+map.on('error', (e) => {
+  readout.innerHTML = `<span class="bad">Map tiles failed to load (network issue): ${(e && e.error && e.error.message) || 'unknown error'}. The verification logic itself doesn't need the map -- an offline version without a live map is available as a backup.</span>`;
+});
+
+function fadeLayer(layerId, prop, from, to, durationMs) {
+  return new Promise(resolve => {
+    const start = performance.now();
+    function step(now) {
+      const t = Math.min((now - start) / durationMs, 1);
+      map.setPaintProperty(layerId, prop, from + (to - from) * t);
+      if (t < 1) requestAnimationFrame(step); else resolve();
+    }
+    requestAnimationFrame(step);
+  });
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function sectorBounds() {
+  const ring = PAYLOAD.verified_sector_geo.coordinates[0];
+  let minLon = Infinity, maxLon = -Infinity, minLat = Infinity, maxLat = -Infinity;
+  for (const [lon, lat] of ring) {
+    if (lon < minLon) minLon = lon;
+    if (lon > maxLon) maxLon = lon;
+    if (lat < minLat) minLat = lat;
+    if (lat > maxLat) maxLat = lat;
+  }
+  return [[minLon, minLat], [maxLon, maxLat]];
+}
+
+async function playSequence() {
+  if (!mapReady) {
+    readout.innerHTML = `<span class="bad">Map isn't ready yet -- wait for the button to say "Play sequence" before tapping it.</span>`;
+    return;
+  }
+  document.getElementById('btn-play').textContent = 'Running...';
+  // reset
+  ['ellipse-fill','sector-fill'].forEach(id => map.setPaintProperty(id, 'fill-opacity', 0));
+  ['ellipse-line','circles-line','sector-line'].forEach(id => map.setPaintProperty(id, 'line-opacity', 0));
+  ['nodes-pt','est-pt'].forEach(id => { map.setPaintProperty(id, 'circle-opacity', 0); map.setPaintProperty(id, 'circle-stroke-opacity', 0); });
+  map.jumpTo({ center: [78.9629, 22.5937], zoom: 3.4, pitch: 0, bearing: 0 });
+
+  setBadge('SIGNAL RECEIVED', '');
+  readout.innerHTML = `<span class="dim">Timing data received from 4 nearby network nodes.</span>`;
+  await sleep(300);
+
+  // Phase 1: flat 2D zoom into the local area -- no tilt, no rotation
+  setBadge('LOCATING AREA', '');
+  map.flyTo({ center: [PAYLOAD.estimated.lon, PAYLOAD.estimated.lat], zoom: 10.6, pitch: 0, bearing: 0, speed: 0.9, curve: 1.4, essential: true });
+  await sleep(900);
+  map.setPaintProperty('nodes-pt', 'circle-opacity', 1);
+  map.setPaintProperty('nodes-pt', 'circle-stroke-opacity', 1);
+  map.setPaintProperty('est-pt', 'circle-opacity', 1);
+  map.setPaintProperty('est-pt', 'circle-stroke-opacity', 1);
+
+  // Phase 2: initial estimate range (red, wide -- before refinement)
+  setBadge('ESTIMATING LOCATION', 'red');
+  readout.innerHTML = `<span class="bad">Initial estimate range:</span> ${PAYLOAD.semi_major_km.toFixed(1)} km &times; ${PAYLOAD.semi_minor_km.toFixed(1)} km -- accuracy before cross-checking against the nodes.`;
+  await Promise.all([
+    fadeLayer('ellipse-fill', 'fill-opacity', 0, 0.35, 700),
+    fadeLayer('ellipse-line', 'line-opacity', 0, 0.9, 700)
+  ]);
+  await sleep(200);
+
+  // Phase 3: each node's maximum possible range
+  setBadge('CROSS-CHECKING NODES', 'red');
+  readout.innerHTML = `<span class="dim">Checking the maximum possible distance from each node, based on its own timing.</span>`;
+  await fadeLayer('circles-line', 'line-opacity', 0, 0.8, 500);
+  await sleep(500);
+
+  // Phase 4: snap red -> green, reveal the verified area
+  setBadge('VERIFIED', 'green');
+  await Promise.all([
+    fadeLayer('ellipse-fill', 'fill-opacity', 0.35, 0, 500),
+    fadeLayer('ellipse-line', 'line-opacity', 0.9, 0, 500),
+    fadeLayer('circles-line', 'line-opacity', 0.8, 0, 500),
+    fadeLayer('sector-fill', 'fill-opacity', 0, 0.55, 600),
+    fadeLayer('sector-line', 'line-opacity', 0, 1, 600)
+  ]);
+
+  // Phase 5: final flat zoom-to-fit, framing the verified area cleanly on screen
+  await sleep(150);
+  map.fitBounds(sectorBounds(), {
+    padding: { top: 90, bottom: 60, left: 60, right: 90 },
+    maxZoom: 17,
+    pitch: 0, bearing: 0, duration: 900, essential: true
+  });
+  await sleep(950);
+
+  const areaTxt = PAYLOAD.verified_sector_area_km2 < 1
+    ? (PAYLOAD.verified_sector_area_km2 * 1e6).toFixed(0) + ' m2'
+    : PAYLOAD.verified_sector_area_km2.toFixed(2) + ' km2';
+  readout.innerHTML = `<span class="ok">Verified</span> -- ${areaTxt} confirmed area<br>`
+    + `Estimated location: ${PAYLOAD.estimated.lat.toFixed(4)}, ${PAYLOAD.estimated.lon.toFixed(4)}<br>`
+    + `<span class="dim">This is the smallest area consistent with every node's timing data.</span>`;
+  document.getElementById('btn-play').textContent = 'Play sequence';
+}
+
+document.getElementById('btn-play').onclick = () => {
+  playSequence().catch(err => {
+    readout.innerHTML = `<span class="bad">Something went wrong: ${err.message}</span>`;
+    document.getElementById('btn-play').textContent = 'Play sequence';
+  });
+};
+</script>
+</body>
+</html>

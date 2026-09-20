@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>TDoA Solve Animation — Indore Demo</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0b1220; color: #e8edf5; }
+  #app { display: flex; flex-direction: column; height: 100vh; }
+  header { padding: 10px 12px 8px; background: #0f1830; border-bottom: 1px solid #223056; }
+  header h1 { font-size: 15px; margin: 0 0 2px; font-weight: 600; }
+  header p { font-size: 12px; margin: 0; color: #93a3c4; }
+  #controls { display: flex; gap: 6px; padding: 8px 12px; background: #0f1830; flex-wrap: wrap; }
+  .btn { flex: 1 1 auto; min-width: 110px; padding: 8px 10px; border-radius: 8px; border: 1px solid #2b3a63; background: #16214a; color: #cdd8f5; font-size: 12px; font-weight: 600; cursor: pointer; text-align: center; }
+  .btn.active { background: #3a5cff; border-color: #3a5cff; color: #fff; }
+  .btn:active { transform: scale(0.97); }
+  #map { flex: 1; }
+  #readout { padding: 10px 12px; background: #0f1830; border-top: 1px solid #223056; font-size: 12px; line-height: 1.5; min-height: 88px; }
+  #readout .status { font-weight: 700; font-size: 13px; }
+  .ok { color: #4ade80; }
+  .bad { color: #f87171; }
+  .dim { color: #93a3c4; }
+  .leaflet-container { background: #0b1220; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>TDoA Multilateration — Signal Solve</h1>
+    <p>4 edge nodes triangulating one transaction near Indore</p>
+  </header>
+  <div id="controls">
+    <div class="btn active" id="btn-low">Hardware timing (σ=0.03ms)</div>
+    <div class="btn" id="btn-high">Internet jitter (σ=5ms)</div>
+    <div class="btn" id="btn-replay">▶ Replay</div>
+  </div>
+  <div id="map"></div>
+  <div id="readout">Loading…</div>
+</div>
+
+<script>
+const DATA = {
+  low_noise: {"sigma_ms": 0.03, "nodes": [{"name": "Indore", "lat": 22.7196, "lon": 75.8577, "arrival_ms": 1.0673272455597598}, {"name": "Ujjain", "lat": 23.1765, "lon": 75.7885, "arrival_ms": 1.2840221084273407}, {"name": "Dewas", "lat": 22.9676, "lon": 76.0534, "arrival_ms": 1.1975957817350262}, {"name": "Pithampur", "lat": 22.61, "lon": 75.69, "arrival_ms": 1.1969558769765267}], "true": {"lat": 22.735, "lon": 75.875}, "estimated": {"lat": 22.760211659786794, "lon": 75.88978218680114}, "clock_bias_true": 1.0312548379952489, "clock_bias_solved": 1.0517312330025501, "converged": true, "semi_major_km": 25.165519909796945, "semi_minor_km": 7.985121507597325, "angle_deg": 150.14254390858696, "ellipse_latlon": [[22.873081035364272, 75.67661839059883], [22.86397196410087, 75.67337414522201], [22.853087525262865, 75.67383270143625], [22.840613954616508, 75.67798621321761], [22.826764678413884, 75.6857636128279], [22.811776661610573, 75.69703182680351], [22.795906353329535, 75.71159805287918], [22.779425298945544, 75.72921305888822], [22.762615493868516, 75.74957544719403], [22.745764558523884, 75.77233681168718], [22.729160817087354, 75.79710769911053], [22.71308836417833, 75.82346427271249], [22.697822203922215, 75.8509555642113], [22.683623544553566, 75.8791111899874], [22.670735329070794, 75.90744939947754], [22.659378078414097, 75.93548531806051], [22.64974611829104, 75.96273924339634], [22.64200425420981, 75.9887448532663], [22.636284951611284, 76.01305718447541], [22.632686069348615, 76.03526024629602], [22.63126918529512, 76.05497413818455], [22.632058542729784, 76.07186154998503], [22.63504063552805, 76.0856335333995], [22.640164439255347, 76.09605444597344], [22.647342284209316, 76.10294598300344], [22.656451355472715, 76.10619022838027], [22.667335794310723, 76.10573167216602], [22.67980936495708, 76.10157816038468], [22.6936586411597, 76.09380076077439], [22.708646657963012, 76.08253254679877], [22.72451696624405, 76.0679663207231], [22.740998020628044, 76.05035131471405], [22.75780782570507, 76.02998892640825], [22.7746587610497, 76.0072275619151], [22.791262502486234, 75.98245667449176], [22.807334955395255, 75.9561001008898], [22.822601115651374, 75.92860880939098], [22.836799775020022, 75.90045318361489], [22.849687990502794, 75.87211497412474], [22.861045241159488, 75.84407905554177], [22.870677201282547, 75.81682513020594], [22.87841906536378, 75.79081952033599], [22.8841383679623, 75.76650718912687], [22.88773725022497, 75.74430412730626], [22.889154134278467, 75.72459023541774], [22.8883647768438, 75.70770282361725], [22.885382684045535, 75.69393084020278], [22.880258880318237, 75.68350992762885]]},
+  high_noise: {"sigma_ms": 5.0, "nodes": [{"name": "Indore", "lat": 22.7196, "lon": 75.8577, "arrival_ms": 5.00428660808022}, {"name": "Ujjain", "lat": 23.1765, "lon": 75.7885, "arrival_ms": 1.9078479386725462}, {"name": "Dewas", "lat": 22.9676, "lon": 76.0534, "arrival_ms": 2.5573828443301903}, {"name": "Pithampur", "lat": 22.61, "lon": 75.69, "arrival_ms": 9.19900921645941}], "true": {"lat": 22.735, "lon": 75.875}, "estimated": {"lat": 26.049809780890442, "lon": 77.15628386920349}, "clock_bias_true": 1.0312548379952489, "clock_bias_solved": 2.7779083082195952, "converged": true, "semi_major_km": 2432313.8518771958, "semi_minor_km": 34702.68087565904, "angle_deg": 68.97268713371963}
+};
+
+const map = L.map('map', { zoomControl: false, attributionControl: false }).setView([22.9, 75.9], 9);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  attribution: '&copy; OpenStreetMap &copy; CARTO', maxZoom: 14, subdomains: 'abcd'
+}).addTo(map);
+
+let animLayers = [];
+function clearAnim() { animLayers.forEach(l => map.removeLayer(l)); animLayers = []; }
+
+function nodeMarker(lat, lon, name) {
+  const m = L.circleMarker([lat, lon], { radius: 6, color: '#3a5cff', weight: 2, fillColor: '#3a5cff', fillOpacity: 1 }).addTo(map);
+  m.bindTooltip(name, { permanent: true, direction: 'top', className: 'nodelabel', offset: [0, -6] });
+  animLayers.push(m);
+  return m;
+}
+
+const readout = document.getElementById('readout');
+
+function runScenario(key) {
+  clearAnim();
+  const d = DATA[key];
+  const maxArrival = Math.max(...d.nodes.map(n => n.arrival_ms));
+  const V_KM_PER_MS = 200.0;
+
+  d.nodes.forEach(n => nodeMarker(n.lat, n.lon, n.name));
+  const trueMarker = L.circleMarker([d.true.lat, d.true.lon], { radius: 5, color: '#93a3c4', weight: 2, fillColor: '#0b1220', fillOpacity: 1 }).addTo(map);
+  trueMarker.bindTooltip('true origin', { permanent: false, direction: 'right' });
+  animLayers.push(trueMarker);
+
+  readout.innerHTML = `<span class="status">Emitting signal pulses…</span><br><span class="dim">Each node timestamps arrival; solver will back out origin + clock bias from the 4 timestamps.</span>`;
+
+  const durationMs = 2600;
+  const startT = performance.now();
+  const rings = d.nodes.map(n => L.circle([n.lat, n.lon], { radius: 1, color: '#4ade80', weight: 1.5, fillOpacity: 0.05, fillColor: '#4ade80' }).addTo(map));
+  rings.forEach(r => animLayers.push(r));
+
+  function frame(now) {
+    const t = Math.min((now - startT) / durationMs, 1);
+    d.nodes.forEach((n, i) => {
+      const radiusKm = t * (n.arrival_ms / maxArrival) * V_KM_PER_MS * (maxArrival / d.nodes[0].arrival_ms > 3 ? 0.35 : 1) * (200 / V_KM_PER_MS) * 60;
+      rings[i].setRadius(Math.max(radiusKm * 1000, 1));
+      rings[i].setStyle({ opacity: 1 - t * 0.6, fillOpacity: 0.08 * (1 - t) });
+    });
+    if (t < 1) {
+      requestAnimationFrame(frame);
+    } else {
+      finishSolve(key);
+    }
+  }
+  requestAnimationFrame(frame);
+}
+
+function finishSolve(key) {
+  const d = DATA[key];
+  const estMarker = L.circleMarker([d.estimated.lat, d.estimated.lon], { radius: 8, color: '#f59e0b', weight: 3, fillColor: '#f59e0b', fillOpacity: 0.85 }).addTo(map);
+  estMarker.bindTooltip('estimated fix', { permanent: false, direction: 'right' });
+  animLayers.push(estMarker);
+
+  const bounds = L.latLngBounds(d.nodes.map(n => [n.lat, n.lon]));
+  bounds.extend([d.true.lat, d.true.lon]);
+
+  if (key === 'low_noise') {
+    const ellipse = L.polygon(d.ellipse_latlon, { color: '#f59e0b', weight: 1.5, fillColor: '#f59e0b', fillOpacity: 0.12, dashArray: '4,4' }).addTo(map);
+    animLayers.push(ellipse);
+    bounds.extend(ellipse.getBounds());
+    map.fitBounds(bounds, { padding: [30, 30] });
+    readout.innerHTML = `<span class="status ok">✓ Converged</span> — clean sub-ms timing<br>`
+      + `True: ${d.true.lat.toFixed(4)}, ${d.true.lon.toFixed(4)} &nbsp;|&nbsp; Estimated: ${d.estimated.lat.toFixed(4)}, ${d.estimated.lon.toFixed(4)}<br>`
+      + `95% error ellipse: <b>${d.semi_major_km.toFixed(1)} km × ${d.semi_minor_km.toFixed(1)} km</b> &nbsp;|&nbsp; clock bias solved ${d.clock_bias_solved.toFixed(3)}ms (true ${d.clock_bias_true.toFixed(3)}ms)<br>`
+      + `<span class="dim">A fix this tight is usable — real TDoA-grade hardware timing.</span>`;
+  } else {
+    map.fitBounds(bounds, { padding: [40, 40] });
+    readout.innerHTML = `<span class="status bad">✗ Fix is unreliable</span> — internet-jitter timing (σ=5ms)<br>`
+      + `True: ${d.true.lat.toFixed(4)}, ${d.true.lon.toFixed(4)} &nbsp;|&nbsp; Raw solve landed at: ${d.estimated.lat.toFixed(4)}, ${d.estimated.lon.toFixed(4)}<br>`
+      + `95% error ellipse: <b>~${Math.round(d.semi_major_km).toLocaleString()} km × ${Math.round(d.semi_minor_km).toLocaleString()} km</b> — bigger than Earth<br>`
+      + `<span class="dim">Same math, same nodes — only the timing precision changed. Do not act on this fix.</span>`;
+  }
+}
+
+let currentKey = 'low_noise';
+document.getElementById('btn-low').onclick = () => { setActive('btn-low'); currentKey = 'low_noise'; runScenario(currentKey); };
+document.getElementById('btn-high').onclick = () => { setActive('btn-high'); currentKey = 'high_noise'; runScenario(currentKey); };
+document.getElementById('btn-replay').onclick = () => runScenario(currentKey);
+function setActive(id) {
+  ['btn-low', 'btn-high'].forEach(b => document.getElementById(b).classList.toggle('active', b === id));
+}
+
+runScenario('low_noise');
+</script>
+</body>
+</html>

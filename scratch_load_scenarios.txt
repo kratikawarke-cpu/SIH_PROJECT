@@ -1,0 +1,763 @@
+Created At: 2026-09-19T19:56:48+05:30
+Completed At: 2026-09-19T19:56:48+05:30
+File Path: `file:///c:/Users/Pratik/Desktop/SIH%20VS/New/index.html`
+Total Lines: 1554
+Total Bytes: 69140
+Showing lines 800 to 1554
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+800:     const maxLevel = ids.length ? Math.max(...byLevel.keys()) : 0;
+801:     let maxTotalH = 0;
+802:     byLevel.forEach(arr => {
+803:       const h = arr.length * CARD_H + (arr.length - 1) * GAP_Y;
+804:       if (h > maxTotalH) maxTotalH = h;
+805:     });
+806: 
+807:     const positions = new Map();
+808:     for (let l = 0; l <= maxLevel; l++) {
+809:       const arr = byLevel.get(l) || [];
+810:       const h = arr.length * CARD_H + (arr.length - 1) * GAP_Y;
+811:       const offsetY = (maxTotalH - h) / 2;
+812:       arr.forEach((id, i) => {
+813:         positions.set(id, {
+814:           x: PAD + l * (CARD_W + GAP_X),
+815:           y: PAD + offsetY + i * (CARD_H + GAP_Y)
+816:         });
+817:       });
+818:     }
+819: 
+820:     return {
+821:       positions,
+822:       width: PAD * 2 + (maxLevel + 1) * CARD_W + maxLevel * GAP_X,
+823:       height: PAD * 2 + Math.max(maxTotalH, CARD_H)
+824:     };
+825:   }
+826: 
+827:   function svgEl(tag, attrs){
+828:     const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+829:     for (const k in attrs) el.setAttribute(k, attrs[k]);
+830:     return el;
+831:   }
+832: 
+833:   let edgeCounter = 0;
+834: 
+835:   function renderGraph(container, accounts, edges){
+836:     container.innerHTML = '';
+837:     if (!accounts.length) {
+838:       container.parentElement.style.height = '160px';
+839:       container.innerHTML = '<div class="empty-state" style="width:100%;padding-top:40px;"><div class="glyph">◌</div><h3>No graph data</h3><p>No accounts to display for this result yet.</p></div>';
+840:       return;
+841:     }
+842:     const { positions, width, height } = layoutGraph(accounts, edges);
+843:     container.style.width = width + 'px';
+844:     container.style.height = height + 'px';
+845:     container.parentElement.style.height = Math.min(height + 24, 460) + 'px';
+846: 
+847:     const svg = svgEl('svg', { width, height, viewBox: `0 0 ${width} ${height}` });
+848:     const defs = svgEl('defs', {});
+849: 
+850:     const accountRole = new Map(accounts.map(a => [a.account_id, a.role]));
+851: 
+852:     const glow = svgEl('filter', { id: 'glowDot', x: '-300%', y: '-300%', width: '700%', height: '700%' });
+853:     glow.appendChild(svgEl('feGaussianBlur', { stdDeviation: '3.2', result: 'blur' }));
+854:     const merge = svgEl('feMerge', {});
+855:     merge.appendChild(svgEl('feMergeNode', { in: 'blur' }));
+856:     merge.appendChild(svgEl('feMergeNode', { in: 'SourceGraphic' }));
+857:     glow.appendChild(merge);
+858:     defs.appendChild(glow);
+859: 
+860:     svg.appendChild(defs);
+861: 
+862:     const labels = [];
+863: 
+864:     edges.forEach(e => {
+865:       const p1 = positions.get(e.source_account);
+866:       const p2 = positions.get(e.destination_account);
+867:       if (!p1 || !p2) return;
+868:       const x1 = p1.x + CARD_W, y1 = p1.y + CARD_H / 2;
+869:       const x2 = p2.x - 6, y2 = p2.y + CARD_H / 2;
+870:       const dx = Math.max(40, (x2 - x1) * 0.5);
+871:       // Plain curved line — no arrowhead. Direction is communicated by
+872:       // the moving glow dot instead, colored to match the money's
+873:       // origin at this hop (e.g. green while it's still leaving a
+874:       // source account, amber once it's inside mule territory).
+875:       const path = `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
+876:       const pathId = 'edgepath-' + (edgeCounter++);
+877: 
+878:       const pathEl = svgEl('path', {
+879:         d: path, id: pathId, fill: 'none',
+880:         stroke: 'rgba(148,163,184,0.35)', 'stroke-width': '2'
+881:       });
+882:       svg.appendChild(pathEl);
+883: 
+884:       const role = accountRole.get(e.source_account) || 'PEER';
+885:       const dotColor = ROLE_COLOR[role] || ROLE_COLOR.PEER;
+886: 
+887:       // Set via style (not the fill attribute) so the browser's CSS
+888:       // engine resolves the var(--role-*) custom property correctly.
+889:       const dot = svgEl('circle', { r: '4.5', filter: 'url(#glowDot)' });
+890:       dot.style.fill = dotColor;
+891:       const anim = svgEl('animateMotion', {
+892:         dur: (2.2 + Math.random() * 1.2).toFixed(2) + 's',
+893:         repeatCount: 'indefinite'
+894:       });
+895:       const mpath = svgEl('mpath', {});
+896:       mpath.setAttributeNS('http://www.w3.org/1999/xlink', 'href', '#' + pathId);
+897:       anim.appendChild(mpath);
+898:       dot.appendChild(anim);
+899:       svg.appendChild(dot);
+900: 
+901:       // Offset above the path's midpoint rather than sitting on top
+902:       // of it — otherwise the label box hides the line itself and
+903:       // blocks the view of the glow dot as it travels past.
+904:       const midX = (x1 + x2) / 2, midY = (y1 + y2) / 2 - 16;
+905:       const amt = (e.amount != null) ? '₹' + Number(e.amount).toLocaleString('en-IN', {maximumFractionDigits:0}) : '';
+906:       labels.push({ x: midX, y: midY, text: [amt, e.mode].filter(Boolean).join(' · ') });
+907:     });
+908: 
+909:     container.appendChild(svg);
+910: 
+911:     accounts.forEach(a => {
+912:       const pos = positions.get(a.account_id);
+913:       if (!pos) return;
+914:       const card = document.createElement('div');
+915:       card.className = 'acct-card';
+916:       card.style.left = pos.x + 'px';
+917:       card.style.top = pos.y + 'px';
+918:       const color = ROLE_COLOR[a.role] || ROLE_COLOR.PEER;
+919:       const roleLabel = ROLE_LABEL[a.role] || a.role || 'Account';
+920:       card.innerHTML = `
+921:         <div class="acct-strip" style="background:${color}"></div>
+922:         <div class="acct-body">
+923:           <div class="acct-id">${escapeHtml(a.account_id)}</div>
+924:           <div class="acct-role" style="color:${color}">${escapeHtml(roleLabel)}</div>
+925:         </div>`;
+926:       container.appendChild(card);
+927:     });
+928: 
+929:     labels.forEach(l => {
+930:       const lbl = document.createElement('div');
+931:       lbl.className = 'edge-label';
+932:       lbl.style.left = l.x + 'px';
+933:       lbl.style.top = l.y + 'px';
+934:       lbl.textContent = l.text;
+935:       container.appendChild(lbl);
+936:     });
+937: 
+938:     enablePan(container.parentElement);
+939:   }
+940: 
+941:   // Click-and-drag panning for the graph canvas — no need to hunt
+942:   // for a scrollbar, just grab the graph and move it.
+943:   function enablePan(el){
+944:     if (!el || el.dataset.panEnabled) return;
+945:     el.dataset.panEnabled = '1';
+946:     el.classList.add('pannable');
+947: 
+948:     let dragging = false, startX = 0, startY = 0, startLeft = 0, startTop = 0;
+949: 
+950:     el.addEventListener('mousedown', (e) => {
+951:       if (e.button !== 0) return;
+952:       dragging = true;
+953:       el.classList.add('panning');
+954:       startX = e.pageX;
+955:       startY = e.pageY;
+956:       startLeft = el.scrollLeft;
+957:       startTop = el.scrollTop;
+958:     });
+959:     window.addEventListener('mousemove', (e) => {
+960:       if (!dragging) return;
+961:       e.preventDefault();
+962:       el.scrollLeft = startLeft - (e.pageX - startX);
+963:       el.scrollTop = startTop - (e.pageY - startY);
+964:     });
+965:     window.addEventListener('mouseup', () => {
+966:       if (!dragging) return;
+967:       dragging = false;
+968:       el.classList.remove('panning');
+969:     });
+970:   }
+971: 
+972:   function escapeHtml(s){
+973:     return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+974:   }
+975: 
+976:   /* ===================== TRACE VIEW ===================== */
+977:   const searchInput = document.getElementById('searchInput');
+978:   const traceBtn = document.getElementById('traceBtn');
+979:   const traceResults = document.getElementById('traceResults');
+980: 
+981:   async function runTrace(){
+982:     const q = searchInput.value.trim();
+983:     if (!q) return;
+984:     traceResults.innerHTML = `<div class="panel"><div class="empty-state"><div class="glyph">◔</div><h3>Tracing…</h3><p>Querying live graph for "${escapeHtml(q)}"</p></div></div>`;
+985:     try {
+986:       const data = await api('/api/trace?q=' + encodeURIComponent(q));
+987:       renderTraceResult(data);
+988:     } catch (e) {
+989:       traceResults.innerHTML = `<div class="panel"><div class="empty-state"><div class="glyph">⚠</div><h3>Trace failed</h3><p>${escapeHtml(e.message)}</p></div></div>`;
+990:       showToast('Trace failed: ' + e.message);
+991:     }
+992:   }
+993:   traceBtn.addEventListener('click', runTrace);
+994:   searchInput.addEventListener('keydown', e => { if (e.key === 'Enter') runTrace(); });
+995: 
+996:   function renderTraceResult(data){
+997:     const badgeClass = 'match-' + (data.match_type || 'none');
+998:     let html = `<div class="panel">`;
+999:     html += `<span class="match-badge ${badgeClass}">${escapeHtml((data.match_type||'none').toUpperCase())} MATCH</span>`;
+1000: 
+1001:     if (data.match_type === 'none') {
+1002:       html += `<div class="empty-state"><div class="glyph">∅</div><h3>Nothing found</h3><p>No account, transaction or scenario matches "${escapeHtml(data.query)}".</p></div>`;
+1003:       html += `</div>`;
+1004:       traceResults.innerHTML = html;
+1005:       return;
+1006:     }
+1007: 
+1008:     // Build ego-network graph for an account match
+1009:     let accounts = [], edges = [];
+1010:     if (data.account) {
+1011:       const focusId = data.account.account.account_id;
+1012:       accounts.push({ account_id: focusId, role: 'FOCUS' });
+1013:       (data.account.incoming || []).forEach(tx => {
+1014:         if (!accounts.find(a => a.account_id === tx.source_account)) {
+1015:           accounts.push({ account_id: tx.source_account, role: 'PEER' });
+1016:         }
+1017:         edges.push({ source_account: tx.source_account, destination_account: focusId,
+1018:           amount: tx.amount, mode: tx.mode, transaction_id: tx.transaction_id, timestamp: tx.timestamp });
+1019:       });
+1020:       (data.account.outgoing || []).forEach(tx => {
+1021:         if (!accounts.find(a => a.account_id === tx.destination_account)) {
+1022:           accounts.push({ account_id: tx.destination_account, role: 'PEER' });
+1023:         }
+1024:         edges.push({ source_account: focusId, destination_account: tx.destination_account,
+1025:           amount: tx.amount, mode: tx.mode, transaction_id: tx.transaction_id, timestamp: tx.timestamp });
+1026:       });
+1027: 
+1028:       html += `<div id="traceGraphWrap" class="graph-scroll" style="margin-top:6px;"><div class="graph-canvas" id="traceGraph"></div></div>`;
+1029:       html += `<div class="legend"><span><i style="background:var(--role-focus)"></i>Searched account</span><span><i style="background:var(--role-peer)"></i>Counterparty</span></div>`;
+1030:     } else if (data.transaction) {
+1031:       const t = data.transaction;
+1032:       accounts = [
+1033:         { account_id: t.source_account || 'UNKNOWN_SRC', role: 'PEER' },
+1034:         { account_id: t.destination_account || 'UNKNOWN_DST', role: 'PEER' }
+1035:       ];
+1036:       edges = [{ source_account: accounts[0].account_id, destination_account: accounts[1].account_id,
+1037:         amount: t.amount, mode: t.mode, transaction_id: t.transaction_id }];
+1038:       html += `<div id="traceGraphWrap" class="graph-scroll" style="margin-top:6px;"><div class="graph-canvas" id="traceGraph"></div></div>`;
+1039:     }
+1040: 
+1041:     if (data.scenarios && data.scenarios.length) {
+1042:       html += `<div style="margin-top:18px;"><div class="panel-title" style="margin-bottom:10px;">Related scenarios (${data.scenarios.length})</div><div class="chips" id="traceScenarioChips"></div></div>`;
+1043:     }
+1044: 
+1045:     html += `</div>`;
+1046:     traceResults.innerHTML = html;
+1047: 
+1048:     const graphMount = document.getElementById('traceGraph');
+1049:     if (graphMount) renderGraph(graphMount, accounts, edges);
+1050: 
+1051:     if (data.scenarios && data.scenarios.length) {
+1052:       const chipWrap = document.getElementById('traceScenarioChips');
+1053:       data.scenarios.forEach(s => {
+1054:         const chip = document.createElement('button');
+1055:         chip.className = 'chip';
+1056:         chip.style.border = 'none';
+1057:         chip.innerHTML = `<span class="mono">${escapeHtml(s.alert_id)}</span><span class="p-tag pat-${escapeHtml(s.pattern||'')}" style="background:none;">${escapeHtml(s.pattern||'')}</span>`;
+1058:         chip.addEventListener('click', () => openScenarioModal(s.alert_id));
+1059:         chipWrap.appendChild(chip);
+1060:       });
+1061:     }
+1062:   }
+1063: 
+1064:   /* ===================== SCENARIOS LIST ===================== */
+1065:   const scenarioGrid = document.getElementById('scenarioGrid');
+1066:   let knownScenarioIds = new Set();
+1067:   let scenariosBooted = false;
+1068: 
+1069:   async function loadScenarios(){
+1070:     try {
+1071:       const data = await api('/api/scenarios?limit=100');
+1072:       renderScenarioGrid(data.scenarios || []);
+1073:     } catch(e) {
+1074:       scenarioGrid.innerHTML = `<div class="panel" style="grid-column:1/-1;"><div class="empty-state"><div class="glyph">⚠</div><h3>Could not load scenarios</h3><p>${escapeHtml(e.message)}</p></div></div>`;
+1075:     }
+1076:   }
+1077: 
+1078:   function relTime(iso){
+1079:     if (!iso) return '';
+1080:     const d = new Date(iso);
+1081:     if (isNaN(d)) return '';
+1082:     const s = Math.floor((Date.now() - d.getTime()) / 1000);
+1083:     if (s < 60) return s + 's ago';
+1084:     if (s < 3600) return Math.floor(s/60) + 'm ago';
+1085:     if (s < 86400) return Math.floor(s/3600) + 'h ago';
+1086:     return Math.floor(s/86400) + 'd ago';
+1087:   }
+1088: 
+1089:   function renderScenarioGrid(scenarios){
+1090:     if (!scenarios.length) {
+1091:       scenarioGrid.innerHTML = `<div class="panel" style="grid-column:1/-1;"><div class="empty-state"><div class="glyph">◌</div><h3>No scenarios yet</h3><p>Detected mule chains will appear here live as the detector finds them.</p></div></div>`;
+1092:       return;
+1093:     }
+1094:     const isFirstLoad = !scenariosBooted;
+1095:     scenarioGrid.innerHTML = '';
+1096:     scenarios.forEach(s => {
+1097:       const isNew = !isFirstLoad && !knownScenarioIds.has(s.alert_id);
+1098:       const card = document.createElement('div');
+1099:       card.className = 'scn-card' + (isNew ? ' is-new' : '');
+1100:       const finals = (s.final_accounts || []).join(', ');
+1101:       card.innerHTML = `
+1102:         <div class="scn-top">
+1103:           <span class="scn-id mono">${escapeHtml(s.alert_id)}</span>
+1104:           <span class="scn-pattern pat-${escapeHtml(s.pattern||'')}">${escapeHtml(s.pattern||'—')}</span>
+1105:         </div>
+1106:         <div class="scn-flow">
+1107:           <span class="src">${escapeHtml(s.source_account||'?')}</span><span class="arrow">→</span>
+1108:           <span class="mul">${escapeHtml(s.mule_account||'?')}</span><span class="arrow">→</span>
+1109:           <span class="fin">${escapeHtml(finals||'?')}</span>
+1110:         </div>
+1111:         <div class="scn-meta">
+1112:           <span>${relTime(s.detected_at)}</span>
+1113:           <span class="scn-states">${(s.states||[]).slice(0,3).map(st=>`<span class="state-tag">${escapeHtml(st)}</span>`).join('')}</span>
+1114:         </div>`;
+1115:       card.addEventListener('click', () => openScenarioModal(s.alert_id));
+1116:       scenarioGrid.appendChild(card);
+1117:       knownScenarioIds.add(s.alert_id);
+1118:     });
+1119:     scenariosBooted = true;
+1120:   }
+1121: 
+1122:   setInterval(() => { if (drawerOpen) loadScenarios(); }, 5000);
+1123: 
+1124:   /* ===================== MODAL ===================== */
+1125:   const modalVeil = document.getElementById('modalVeil');
+1126:   const modalTitle = document.getElementById('modalTitle');
+1127:   const modalSub = document.getElementById('modalSub');
+1128:   const modalStats = document.getElementById('modalStats');
+1129:   const modalGraph = document.getElementById('modalGraph');
+1130:   const txTableWrap = document.getElementById('txTableWrap');
+1131: 
+1132:   // Modal Tab Elements
+1133:   const tabGraph = document.getElementById('tabGraph');
+1134:   const tabMap = document.getElementById('tabMap');
+1135:   const tabLedger = document.getElementById('tabLedger');
+1136:   const modalAtmCount = document.getElementById('modalAtmCount');
+1137: 
+1138:   const modalGraphSection = document.getElementById('modalGraphSection');
+1139:   const modalMapSection = document.getElementById('modalMapSection');
+1140:   const modalLedgerSection = document.getElementById('modalLedgerSection');
+1141: 
+1142:   const mapFitAllBtn = document.getElementById('mapFitAllBtn');
+1143:   const mapFitAtmsBtn = document.getElementById('mapFitAtmsBtn');
+1144: 
+1145:   let modalMapInstance = null;
+1146:   let modalMapMarkers = [];
+1147:   let modalMapPolyline = null;
+1148:   let currentCaseData = null;
+1149:   let activeTab = 'graph';
+1150: 
+1151:   function switchModalTab(tab){
+1152:     activeTab = tab;
+1153:     [tabGraph, tabMap, tabLedger].forEach(t => t.classList.remove('active'));
+1154:     modalGraphSection.style.display = 'none';
+1155:     modalMapSection.style.display = 'none';
+1156:     modalLedgerSection.style.display = 'none';
+1157: 
+1158:     if (tab === 'graph') {
+1159:       tabGraph.classList.add('active');
+1160:       modalGraphSection.style.display = 'block';
+1161:     } else if (tab === 'map') {
+1162:       tabMap.classList.add('active');
+1163:       modalMapSection.style.display = 'block';
+1164:       if (modalMapInstance) {
+1165:         setTimeout(() => {
+1166:           modalMapInstance.invalidateSize();
+1167:           // Auto-zoom to the cluster at street level
+1168:           fitMapBoundsCluster();
+1169:         }, 150);
+1170:       }
+1171:     } else if (tab === 'ledger') {
+1172:       tabLedger.classList.add('active');
+1173:       modalLedgerSection.style.display = 'block';
+1174:     }
+1175:   }
+1176: 
+1177:   tabGraph.addEventListener('click', () => switchModalTab('graph'));
+1178:   tabMap.addEventListener('click', () => switchModalTab('map'));
+1179:   tabLedger.addEventListener('click', () => switchModalTab('ledger'));
+1180: 
+1181:   document.getElementById('modalClose').addEventListener('click', closeModal);
+1182:   modalVeil.addEventListener('click', e => { if (e.target === modalVeil) closeModal(); });
+1183:   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+1184: 
+1185:   function closeModal(){
+1186:     modalVeil.classList.remove('open');
+1187:     switchModalTab('graph');
+1188:   }
+1189: 
+1190:   async function openScenarioModal(alertId){
+1191:     modalVeil.classList.add('open');
+1192:     modalTitle.textContent = alertId;
+1193:     modalSub.textContent = 'Loading live scenario data…';
+1194:     modalStats.innerHTML = '';
+1195:     modalGraph.innerHTML = '';
+1196:     txTableWrap.innerHTML = '';
+1197:     switchModalTab('graph');
+1198: 
+1199:     try {
+1200:       const data = await api('/api/scenarios/' + encodeURIComponent(alertId));
+1201:       currentCaseData = data;
+1202:       renderModal(data);
+1203:     } catch(e) {
+1204:       modalSub.textContent = 'Failed to load: ' + e.message;
+1205:     }
+1206:   }
+1207: 
+1208:   function renderModal(data){
+1209:     const s = data.scenario;
+1210:     modalSub.textContent = `${s.pattern || ''} pattern · detected ${relTime(s.detected_at)} · ${data.accounts.length} accounts · ${data.transactions.length} transactions`;
+1211: 
+1212:     const total = (data.transactions || []).reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+1213:     modalStats.innerHTML = `
+1214:       <div class="pill">Total moved<b>₹${total.toLocaleString('en-IN',{maximumFractionDigits:0})}</b></div>
+1215:       <div class="pill">Source<b class="mono">${escapeHtml(s.source_account||'—')}</b></div>
+1216:       <div class="pill">Mule<b class="mono">${escapeHtml(s.mule_account||'—')}</b></div>
+1217:       <div class="pill">Final<b class="mono">${escapeHtml((s.final_accounts||[]).join(', ')||'—')}</b></div>
+1218:       ${(s.states||[]).map(st => `<div class="pill">${escapeHtml(st)}</div>`).join('')}
+1219:     `;
+1220: 
+1221:     // Render Flow Graph
+1222:     renderGraph(modalGraph, data.accounts, data.transactions);
+1223: 
+1224:     // Render Ledger
+1225:     let rows = '';
+1226:     (data.transactions || []).forEach(t => {
+1227:       rows += `<tr>
+1228:         <td>${escapeHtml(t.transaction_id)}</td>
+1229:         <td>${escapeHtml(t.source_account)}</td>
+1230:         <td>${escapeHtml(t.destination_account)}</td>
+1231:         <td>₹${Number(t.amount||0).toLocaleString('en-IN',{maximumFractionDigits:0})}</td>
+1232:         <td><span class="mode-tag">${escapeHtml(t.mode||'—')}</span></td>
+1233:         <td>${escapeHtml(t.status||'—')}</td>
+1234:       </tr>`;
+1235:     });
+1236:     txTableWrap.innerHTML = `<table class="tx-table">
+1237:       <thead><tr><th>Transaction</th><th>Source</th><th>Destination</th><th>Amount</th><th>Mode</th><th>Status</th></tr></thead>
+1238:       <tbody>${rows}</tbody>
+1239:     </table>`;
+1240: 
+1241:     // Render Interactive Map & ATM Tracker
+1242:     renderModalMapAndAtms(data);
+1243:   }
+1244: 
+1245:   /* ===================== MAP & ATM CONTROLLER ===================== */
+1246:   function renderModalMapAndAtms(data){
+1247:     const atms = data.atms || [];
+1248:     const perimeter = data.perimeter || null;
+1249: 
+1250:     modalAtmCount.textContent = `${atms.length} Predicted ATM${atms.length === 1 ? '' : 's'}`;
+1251: 
+1252:     // 1. Initialize Leaflet instance once
+1253:     if (!modalMapInstance) {
+1254:       modalMapInstance = L.map('modalMap', {
+1255:         center: [21.0, 78.5],
+1256:         zoom: 5,
+1257:         zoomControl: true,
+1258:       });
+1259: 
+1260:       L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+1261:         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+1262:         subdomains: 'abcd',
+1263:         maxZoom: 19,
+1264:       }).addTo(modalMapInstance);
+1265: 
+1266:       mapFitAllBtn.addEventListener('click', () => {
+1267:         fitMapBoundsCluster();
+1268:       });
+1269: 
+1270:       mapFitAtmsBtn.addEventListener('click', () => {
+1271:         if (currentCaseData && currentCaseData.atms && currentCaseData.atms.length) {
+1272:           const topAtm = currentCaseData.atms[0];
+1273:           modalMapInstance.flyTo([topAtm.latitude, topAtm.longitude], 16, { duration: 1.0 });
+1274:           showToast(`🎯 Focusing Primary Target: ${topAtm.atm_id} (${topAtm.probability}% Probability)`);
+1275:         } else {
+1276:           showToast('No predicted ATM coordinates in this scenario');
+1277:         }
+1278:       });
+1279:     }
+1280: 
+1281:     // 2. Clear old layers
+1282:     modalMapMarkers.forEach(m => m.remove());
+1283:     modalMapMarkers = [];
+1284:     if (modalMapPolyline) {
+1285:       modalMapPolyline.remove();
+1286:       modalMapPolyline = null;
+1287:     }
+1288: 
+1289:     // 3. Populate ATM Sidebar List (Ranked by Probability)
+1290:     const atmList = document.getElementById('atmList');
+1291:     atmList.innerHTML = '';
+1292:     const atmMarkerMap = new Map();
+1293: 
+1294:     // Update sidebar dynamic header
+1295:     const atmSidebarSub = document.getElementById('atmSidebarSub');
+1296:     if (atmSidebarSub) {
+1297:       atmSidebarSub.textContent = atms.length
+1298:         ? `${atms.length} predicted ATM${atms.length === 1 ? '' : 's'} · ranked by cash-out risk · 1.2km perimeter`
+1299:         : 'No predictions available for this scenario';
+1300:     }
+1301: 
+1302:     if (!atms.length) {
+1303:       atmList.innerHTML = `<div class="empty-state" style="padding:24px 12px;"><div class="glyph">ℹ</div><p>No ATM withdrawal predictions for this case.</p></div>`;
+1304:     } else {
+1305:       atms.forEach((atm, idx) => {
+1306:         const card = document.createElement('div');
+1307:         card.className = 'atm-card';
+1308:         card.id = 'atm-card-' + idx;
+1309: 
+1310:         const isPrimary   = (atm.tier === 'PRIMARY_TARGET'   || atm.probability >= 90);
+1311:         const isTertiary  = (atm.tier === 'TERTIARY_CANDIDATE' && atm.probability < 60);
+1312:         const isSecondary = !isPrimary && !isTertiary;
+1313: 
+1314:         const probBadgeClass = isPrimary ? 'prob-high' : isTertiary ? 'prob-low' : 'prob-med';
+1315:         const tierColor      = isPrimary ? '#f43f5e' : isTertiary ? '#a78bfa' : '#f59e0b';
+1316:         const tierTitle      = isPrimary ? '🚨 PRIMARY PREDICTED TARGET'
+1317:                              : isTertiary ? '🟣 TERTIARY OUTER-PERIMETER CANDIDATE'
+1318:                              : '🟠 SECONDARY CANDIDATE';
+1319: 
+1320:         const riskPct  = atm.withdrawal_risk_pct ?? atm.probability;
+1321:         const riskClass = isPrimary ? 'high' : isTertiary ? 'low' : 'med';
+1322: 
+1323:         card.innerHTML = `
+1324:           <div class="atm-card-top">
+1325:             <span class="prob-badge ${probBadgeClass}">${atm.probability}% WITHDRAWAL PROBABILITY</span>
+1326:             <span class="atm-card-amount">₹${Number(atm.withdrawal_amount||0).toLocaleString('en-IN', {maximumFractionDigits:0})}</span>
+1327:           </div>
+1328:           <div style="font-size:11px;font-weight:700;color:${tierColor};letter-spacing:.04em;margin-bottom:3px;">
+1329:             ${tierTitle}
+1330:           </div>
+1331:           <span class="risk-pill ${riskClass}">💸 Cash-out Risk: ${riskPct}%</span>
+1332:           <div class="atm-card-bank">${escapeHtml(atm.bank_name)} &middot; <span class="mono" style="font-size:11.5px;color:var(--text);">${escapeHtml(atm.atm_id)}</span></div>
+1333:           <div class="atm-card-address">${escapeHtml(atm.address)}</div>
+1334:           <div class="atm-card-footer">
+1335:             <span class="distance-pill">📍 <b>${atm.distance_m || 250}m</b> from suspect</span>
+1336:             <span class="cctv-online"><span class="dot live" style="width:6px;height:6px;"></span>CCTV Online</span>
+1337:           </div>
+1338:           <div class="window-pill">⏱ ${escapeHtml(atm.predicted_window || 'Imminent Cash-Out Window')}</div>
+1339:           <div class="atm-actions">
+1340:             <a class="atm-action-btn" href="${escapeHtml(atm.google_maps_url)}" target="_blank" rel="noopener" title="Open in Google Maps">
+1341:               📍 Dispatch Route
+1342:             </a>
+1343:             <button class="atm-action-btn cctv-btn" onclick="requestCCTV('${escapeHtml(atm.atm_id)}')">
+1344:               🚨 Freeze ATM Alert
+1345:             </button>
+1346:           </div>
+1347:         `;
+1348:         card.addEventListener('click', (e) => {
+1349:           if (e.target.closest('.atm-actions')) return;
+1350:           highlightAtm(idx, atm, atmMarkerMap);
+1351:         });
+1352:         atmList.appendChild(card);
+1353:       });
+1354:     }
+1355: 
+1356:     // 4. Draw Suspect Geofence & Anchor
+1357:     if (perimeter && perimeter.center_lat && perimeter.center_lon) {
+1358:       // 1.2km Surveillance Perimeter Circle
+1359:       const geofence = L.circle([perimeter.center_lat, perimeter.center_lon], {
+1360:         radius: perimeter.radius_m || 1200,
+1361:         color: '#f43f5e',
+1362:         fillColor: '#f43f5e',
+1363:         fillOpacity: 0.08,
+1364:         weight: 1.5,
+1365:         dashArray: '6, 6',
+1366:       }).addTo(modalMapInstance);
+1367:       modalMapMarkers.push(geofence);
+1368: 
+1369:       // Suspect Anchor Marker
+1370:       const suspectIcon = L.divIcon({
+1371:         className: 'custom-suspect-icon',
+1372:         html: `
+1373:           <div class="node-beacon beacon-suspect">
+1374:             <div class="node-beacon-ring"></div>
+1375:             <div class="node-beacon-core">🎯</div>
+1376:           </div>
+1377:         `,
+1378:         iconSize: [30, 30],
+1379:         iconAnchor: [15, 15],
+1380:         popupAnchor: [0, -15],
+1381:       });
+1382: 
+1383:       const suspectPopup = `
+1384:         <div style="font-family:'Space Grotesk',sans-serif;min-width:190px;">
+1385:           <div style="color:#f43f5e;font-weight:700;font-size:13px;margin-bottom:3px;">🎯 Suspect Terminal Ping</div>
+1386:           <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#e2e8f0;">Account: <b>${escapeHtml(perimeter.suspect_account || 'FINAL_MULE')}</b></div>
+1387:           <div style="font-size:11.5px;color:#94a3b8;margin-top:2px;">Location: ${escapeHtml(perimeter.city)}, ${escapeHtml(perimeter.state)}</div>
+1388:           <div style="font-size:12px;color:#34d399;font-weight:700;margin-top:4px;">Cash-out Balance: ₹${Number(perimeter.cashout_amount||0).toLocaleString('en-IN', {maximumFractionDigits:0})}</div>
+1389:           <div style="font-size:10px;color:#64748b;margin-top:4px;">Threat Geofence: 1.2 km radius</div>
+1390:         </div>
+1391:       `;
+1392: 
+1393:       const sMarker = L.marker([perimeter.center_lat, perimeter.center_lon], { icon: suspectIcon })
+1394:         .bindPopup(suspectPopup)
+1395:         .addTo(modalMapInstance);
+1396:       modalMapMarkers.push(sMarker);
+1397: 
+1398:       // Draw vector lines from suspect to each candidate ATM
+1399:       // Primary = red solid-dash, Secondary = amber dash, Tertiary = purple longer-dash
+1400:       atms.forEach(atm => {
+1401:         const isPrimVec  = (atm.tier === 'PRIMARY_TARGET'    || atm.probability >= 90);
+1402:         const isTertVec  = (atm.tier === 'TERTIARY_CANDIDATE' && atm.probability < 60);
+1403:         const lineColor  = isPrimVec ? '#f43f5e' : isTertVec ? '#a78bfa' : '#f59e0b';
+1404:         const lineDash   = isPrimVec ? '5, 5'    : isTertVec ? '9, 6'    : '5, 5';
+1405:         const lineWeight = isPrimVec ? 2.2        : isTertVec ? 1.4       : 2;
+1406:         const vec = L.polyline([[perimeter.center_lat, perimeter.center_lon], [atm.latitude, atm.longitude]], {
+1407:           color: lineColor,
+1408:           weight: lineWeight,
+1409:           opacity: 0.65,
+1410:           dashArray: lineDash,
+1411:         }).addTo(modalMapInstance);
+1412:         modalMapMarkers.push(vec);
+1413:       });
+1414:     }
+1415: 
+1416:     // 5. Place ONLY Candidate Predicted ATM Markers
+1417:     atms.forEach((atm, idx) => {
+1418:       const isPrimary  = (atm.tier === 'PRIMARY_TARGET'    || atm.probability >= 90);
+1419:       const isTertiary = (atm.tier === 'TERTIARY_CANDIDATE' && atm.probability < 60);
+1420:       const beaconSubClass = isPrimary ? '' : isTertiary ? 'tertiary' : 'secondary';
+1421: 
+1422:       const atmIcon = L.divIcon({
+1423:         className: 'custom-atm-marker',
+1424:         html: `
+1425:           <div class="atm-beacon ${beaconSubClass}">
+1426:             <div class="atm-beacon-ring"></div>
+1427:             <div class="atm-beacon-core">🏧</div>
+1428:           </div>
+1429:         `,
+1430:         iconSize: [34, 34],
+1431:         iconAnchor: [17, 17],
+1432:         popupAnchor: [0, -18],
+1433:       });
+1434: 
+1435:       const tierColor   = isPrimary ? '#f43f5e' : isTertiary ? '#a78bfa' : '#f59e0b';
+1436:       const btnBg        = isPrimary ? 'var(--accent)' : isTertiary ? '#a78bfa' : '#f59e0b';
+1437:       const riskPct      = atm.withdrawal_risk_pct ?? atm.probability;
+1438:       const riskColor    = isPrimary ? '#f43f5e' : isTertiary ? '#a78bfa' : '#f59e0b';
+1439:       const tierLabel    = isPrimary ? 'PRIMARY TARGET'
+1440:                          : isTertiary ? 'TERTIARY CANDIDATE'
+1441:                          : 'SECONDARY CANDIDATE';
+1442: 
+1443:       const atmPopup = `
+1444:         <div style="font-family:'Space Grotesk',sans-serif;min-width:230px;">
+1445:           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+1446:             <span style="font-family:'JetBrains Mono',monospace;font-weight:700;font-size:12px;color:${tierColor};">${escapeHtml(atm.atm_id)}</span>
+1447:             <span style="background:${tierColor}28;color:${tierColor};font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;">
+1448:               ${atm.probability}% PROBABILITY
+1449:             </span>
+1450:           </div>
+1451:           <div style="font-size:10px;color:${tierColor};font-weight:700;letter-spacing:.04em;margin-bottom:3px;">${tierLabel}</div>
+1452:           <div style="font-size:13px;font-weight:700;color:#fff;">${escapeHtml(atm.bank_name)}</div>
+1453:           <div style="font-size:11.5px;color:#94a3b8;margin:2px 0 6px;">${escapeHtml(atm.address)}</div>
+1454:           <div style="background:#141b28;border:1px solid rgba(255,255,255,0.08);padding:7px 9px;border-radius:6px;margin-bottom:8px;">
+1455:             <div style="font-size:10.5px;color:#94a3b8;">Expected Cash Dispersal:</div>
+1456:             <div style="font-size:15px;font-weight:700;color:#34d399;font-family:'JetBrains Mono',monospace;">₹${Number(atm.withdrawal_amount||0).toLocaleString('en-IN', {maximumFractionDigits:0})}</div>
+1457:             <div style="font-size:11px;font-weight:700;color:${riskColor};margin-top:4px;">
+1458:               💸 Cash-out Risk at this ATM: <b>${riskPct}%</b>
+1459:             </div>
+1460:             <div style="font-size:10.5px;color:#f59e0b;margin-top:2px;">⏱ ${escapeHtml(atm.predicted_window||'')}</div>
+1461:             <div style="font-size:10.5px;color:#34d399;margin-top:2px;">📍 Distance: ${atm.distance_m || 250}m from suspect ping</div>
+1462:           </div>
+1463:           <a href="${escapeHtml(atm.google_maps_url)}" target="_blank" rel="noopener" style="display:block;text-align:center;background:${btnBg};color:#04121a;padding:7px;border-radius:6px;font-weight:700;font-size:11.5px;text-decoration:none;">
+1464:             📍 Dispatch Route (Google Maps)
+1465:           </a>
+1466:         </div>
+1467:       `;
+1468: 
+1469:       const marker = L.marker([atm.latitude, atm.longitude], { icon: atmIcon })
+1470:         .bindPopup(atmPopup)
+1471:         .addTo(modalMapInstance);
+1472: 
+1473:       modalMapMarkers.push(marker);
+1474:       atmMarkerMap.set(idx, marker);
+1475:     });
+1476:   }
+1477: 
+1478:   function fitMapBounds(){
+1479:     if (!modalMapInstance || !currentCaseData) return;
+1480:     const atms = currentCaseData.atms || [];
+1481:     const perimeter = currentCaseData.perimeter;
+1482: 
+1483:     const allCoords = [];
+1484:     if (perimeter && perimeter.center_lat && perimeter.center_lon) {
+1485:       allCoords.push([perimeter.center_lat, perimeter.center_lon]);
+1486:     }
+1487:     atms.forEach(a => {
+1488:       if (!isNaN(a.latitude) && !isNaN(a.longitude)) {
+1489:         allCoords.push([a.latitude, a.longitude]);
+1490:       }
+1491:     });
+1492: 
+1493:     if (allCoords.length) {
+1494:       modalMapInstance.fitBounds(allCoords, { padding: [50, 50], maxZoom: 15 });
+1495:     }
+1496:   }
+1497: 
+1498:   // Street-level zoom: fits just the tight ATM cluster (all within ~600m)
+1499:   function fitMapBoundsCluster(){
+1500:     if (!modalMapInstance || !currentCaseData) return;
+1501:     const atms = currentCaseData.atms || [];
+1502:     const perimeter = currentCaseData.perimeter;
+1503: 
+1504:     const clusterCoords = [];
+1505:     if (perimeter && perimeter.center_lat && perimeter.center_lon) {
+1506:       clusterCoords.push([perimeter.center_lat, perimeter.center_lon]);
+1507:     }
+1508:     atms.forEach(a => {
+1509:       if (!isNaN(a.latitude) && !isNaN(a.longitude)) {
+1510:         clusterCoords.push([a.latitude, a.longitude]);
+1511:       }
+1512:     });
+1513: 
+1514:     if (clusterCoords.length) {
+1515:       // Fit with tight padding so all ATMs + anchor fill the map view
+1516:       modalMapInstance.fitBounds(clusterCoords, {
+1517:         padding: [40, 40],
+1518:         maxZoom: 16,   // never zoom out further than street level
+1519:         minZoom: 14,   // never too far out
+1520:       });
+1521:     } else if (perimeter) {
+1522:       // Fallback: just fly to anchor at street zoom
+1523:       modalMapInstance.flyTo([perimeter.center_lat, perimeter.center_lon], 15, { duration: 0.8 });
+1524:     }
+1525:   }
+1526: 
+1527:   function highlightAtm(idx, atm, atmMarkerMap){
+1528:     if (!modalMapInstance) return;
+1529:     document.querySelectorAll('.atm-card').forEach(c => c.classList.remove('active'));
+1530:     const card = document.getElementById('atm-card-' + idx);
+1531:     if (card) {
+1532:       card.classList.add('active');
+1533:       card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+1534:     }
+1535: 
+1536:     modalMapInstance.flyTo([atm.latitude, atm.longitude], 16, { duration: 1.0 });
+1537:     const marker = atmMarkerMap.get(idx);
+1538:     if (marker) {
+1539:       setTimeout(() => marker.openPopup(), 1100);
+1540:     }
+1541:   }
+1542: 
+1543:   window.requestCCTV = function(atmId){
+1544:     showToast('🚨 Emergency alert transmitted: Withdrawal lock command issued for ' + atmId);
+1545:   };
+1546: 
+1547:   /* ===================== INITIAL EMPTY STATE ===================== */
+1548:   traceResults.innerHTML = `<div class="panel"><div class="empty-state"><div class="glyph">⌕</div><h3>Search to trace a chain</h3><p>Enter an account ID, transaction ID, or alert ID above, then click Trace.</p></div></div>`;
+1549: 
+1550: })();
+1551: </script>
+1552: </body>
+1553: </html>
+1554: 
+The above content does NOT show the entire file contents. If you need to view any lines of the file which were not shown to complete your task, call this tool again to view those lines.

@@ -1,0 +1,50 @@
+624:         <span><i style="background:#f43f5e;border-radius:50%;"></i>🎯 Suspect Device Anchor</span>
+625:         <span><i style="background:rgba(244,63,94,0.3);border:1px dashed #f43f5e;border-radius:50%;"></i>⭕ 1.2km Threat Geofence</span>
+626:         <span><i style="background:#f43f5e"></i>🚨 Primary ATM (≥90% risk)</span>
+627:         <span><i style="background:#f59e0b"></i>🟠 Secondary ATM</span>
+628:         <span><i style="background:#a78bfa"></i>🟣 Tertiary ATM (outer perimeter)</span>
+629:       </div>
+630:     </div>
+631: 
+632:     <!-- 3. Ledger Section -->
+633:     <div id="modalLedgerSection" style="display:none;">
+634:       <div id="txTableWrap"></div>
+635:     </div>
+636:   </div>
+637: </div>
+638: 
+639: <div class="toast" id="toast"></div>
+640: 
+641: <script>
+642: (function(){
+643:   "use strict";
+644: 
+645:   /* ===================== CONFIG ===================== */
+646:   const CFG_KEY = "chaintrace_backend_url";
+647:   let BASE_URL = localStorage.getItem(CFG_KEY) || "http://localhost:8000";
+648: 
+649:   const cfgBtn = document.getElementById('cfgBtn');
+650:   const cfgPop = document.getElementById('cfgPop');
+651:   const cfgUrl = document.getElementById('cfgUrl');
+652:   cfgUrl.value = BASE_URL;
+653:   cfgBtn.addEventListener('click', () => cfgPop.classList.toggle('open'));
+654:   document.addEventListener('click', (e) => {
+655:     if (!cfgPop.contains(e.target) && e.target !== cfgBtn) cfgPop.classList.remove('open');
+656:   });
+657:   document.getElementById('cfgSave').addEventListener('click', () => {
+658:     const v = cfgUrl.value.trim().replace(/\/+$/, '');
+659:     if (v) { BASE_URL = v; localStorage.setItem(CFG_KEY, v); }
+660:     cfgPop.classList.remove('open');
+661:     refreshHealthAndStats();
+662:     if (drawerOpen) loadScenarios();
+663:   });
+664: 
+665:   /* ===================== FETCH HELPER ===================== */
+666:   function withTimeout(promise, ms){
+667:     return Promise.race([
+668:       promise,
+669:       new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))
+670:     ]);
+671:   }
+672: 
+673:   async function api(path){

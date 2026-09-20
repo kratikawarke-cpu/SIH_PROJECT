@@ -1,0 +1,10 @@
+{
+  "name": "chaintrace",
+  "version": "1.0.0",
+  "description": "CHAINTRACE - Live Mule-Chain & ATM Intercept Radar",
+  "scripts": {
+    "start": "python run.py",
+    "dev": "python run.py",
+    "pipeline": "python run.py --stream"
+  }
+}

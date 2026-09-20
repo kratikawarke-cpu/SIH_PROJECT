@@ -12,7 +12,7 @@ from rich.table import Table
 from rich.live import Live
 from rich import box
 
-from geo_india import infer_state
+from geo_india import infer_state, random_land_location
 
 
 # ============================================================
@@ -90,8 +90,7 @@ def unique_account_id(used_ids):
 
 def random_device_location():
 
-    latitude = random.uniform(8.0, 30.0)
-    longitude = random.uniform(68.0, 88.0)
+    latitude, longitude, state, city = random_land_location()
 
     return latitude, longitude
 
